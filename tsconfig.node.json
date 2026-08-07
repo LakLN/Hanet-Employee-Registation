@@ -1,0 +1,36 @@
+{
+  "compilerOptions": {
+    "composite": true,
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    // Bắt lỗi truy cập phần tử mảng/record có thể undefined (arr[0], map[key]) — nguồn lỗi runtime
+    // phổ biến nhất mà `strict` một mình không bắt được.
+    "noUncheckedIndexedAccess": true,
+    "noFallthroughCasesInSwitch": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    // electron-vite lo phần biên dịch; tsc chỉ còn nhiệm vụ kiểm tra kiểu.
+    "noEmit": true,
+    "types": ["node", "electron-vite/node"],
+    "paths": {
+      "@shared/*": ["./src/shared/*"],
+      "@main/*": ["./src/main/*"]
+    }
+  },
+  "include": [
+    "src/main/**/*",
+    "src/preload/**/*",
+    "src/shared/**/*",
+    "tests/main/**/*",
+    "tests/shared/**/*",
+    "electron.vite.config.ts",
+    "vitest.config.ts",
+    "eslint.config.mjs"
+  ]
+}

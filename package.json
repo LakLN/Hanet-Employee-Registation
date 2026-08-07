@@ -1,0 +1,107 @@
+{
+  "name": "hanet-employee-registration",
+  "version": "0.0.1",
+  "description": "Ứng dụng nội bộ đăng ký nhân viên lên hệ thống camera AI Hanet",
+  "author": "Maxcom",
+  "private": true,
+  "main": "out/main/index.js",
+  "engines": {
+    "node": ">=20.19"
+  },
+  "scripts": {
+    "dev": "electron-vite dev",
+    "clean": "rimraf out release",
+    "build": "npm run clean && electron-vite build",
+    "start": "electron-vite preview",
+    "dist": "npm run build && electron-builder --win",
+    "release": "npm run build && electron-builder --win --publish always",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "typecheck": "tsc -b tsconfig.json",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "license:generate": "node scripts/generate-license.js"
+  },
+  "build": {
+    "appId": "vn.com.maxcom.hanetemployeeregistation",
+    "productName": "Hanet Employee Registration",
+    "asar": true,
+    "asarUnpack": [
+      "out/main/*Worker*.js"
+    ],
+    "directories": {
+      "output": "release",
+      "buildResources": "resources"
+    },
+    "files": [
+      "out/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "resources/icon-256.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Hanet Employee Registration"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "LakLN",
+        "repo": "Hanet-Employee-Registation"
+      }
+    ]
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "dotenv": "^16.1.4",
+    "electron-log": "^5.4.4",
+    "electron-updater": "^6.8.9",
+    "exceljs": "^4.3.0",
+    "form-data": "^4.0.0",
+    "jimp": "^0.22.12",
+    "p-limit": "^3.1.0",
+    "react-window": "^1.8.11",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/jimp": "^0.2.1",
+    "@types/node": "^20.14.0",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@types/react-window": "^1.8.8",
+    "@vitejs/plugin-react-swc": "^3.11.0",
+    "autoprefixer": "^10.5.4",
+    "electron": "^43.2.0",
+    "electron-builder": "^26.15.3",
+    "electron-vite": "^5.0.0",
+    "eslint": "^10.8.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.3",
+    "globals": "^17.8.0",
+    "lucide-react": "^1.27.0",
+    "postcss": "^8.5.23",
+    "prettier": "^3.9.6",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "rimraf": "^6.1.3",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.6.0",
+    "typescript-eslint": "^8.65.0",
+    "vite": "^7.3.6",
+    "vitest": "^2.1.9"
+  }
+}

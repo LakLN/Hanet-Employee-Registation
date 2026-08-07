@@ -1,0 +1,192 @@
+import { CheckCircle2, Loader2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { friendlyErrorMessage } from '../utils/friendlyError';
+import { ServerUrlCombobox } from './ServerUrlCombobox';
+
+const DEFAULT_API_BASE_URL = 'https://partner.hanet.ai';
+
+function secretPlaceholder(length: number): string {
+  return '•'.repeat(length);
+}
+
+/**
+ * Form cấu hình kết nối Hanet + license, dùng chung ở 2 nơi: màn hình chặn lần đầu
+ * (RuntimeConfigGate) và modal Cài đặt mở lại từ header (SettingsModal). Nút "Kết nối tài khoản
+ * Hanet" mở popup đăng nhập OAuth thật ở main process (xem hanetOAuthWindow.ts) — sau khi kết nối
+ * xong, apiBaseUrl/clientId/clientSecret tự lưu luôn, không có nút Lưu riêng.
+ *
+ * Place ID KHÔNG nằm ở đây — chọn/đổi place là việc của ActivePlaceSwitcher ở header, độc lập với
+ * kết nối tài khoản. License chỉ nhập/xác thực được MỘT LẦN — sau khi lưu, ô license khoá vĩnh viễn,
+ * không có luồng đổi lại trong app.
+ */
+export function HanetConnectionSettingsForm({ onSaved }: { onSaved: () => void }) {
+  const [apiBaseUrl, setApiBaseUrl] = useState(DEFAULT_API_BASE_URL);
+  const [savedApiBaseUrls, setSavedApiBaseUrls] = useState<string[]>([]);
+  const [clientId, setClientId] = useState('');
+  const [clientSecret, setClientSecret] = useState('');
+  const [savedSecretPlaceholder, setSavedSecretPlaceholder] = useState('');
+
+  const [licenseKey, setLicenseKey] = useState('');
+  const [isLicenseActivated, setIsLicenseActivated] = useState(false);
+  const [isActivatingLicense, setIsActivatingLicense] = useState(false);
+  const [licenseError, setLicenseError] = useState<string | null>(null);
+
+  const [isConnected, setIsConnected] = useState(false);
+  const [connectedEmail, setConnectedEmail] = useState<string | null>(null);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [connectError, setConnectError] = useState<string | null>(null);
+
+  useEffect(() => {
+    window.hanetImporter.getRuntimeConfigStatus().then((status) => {
+      if (status.current) {
+        setApiBaseUrl(status.current.apiBaseUrl || DEFAULT_API_BASE_URL);
+        setSavedApiBaseUrls(status.current.savedApiBaseUrls);
+        setClientId(status.current.clientId || '');
+        if (status.current.clientSecretLength > 0) {
+          const placeholder = secretPlaceholder(status.current.clientSecretLength);
+          setSavedSecretPlaceholder(placeholder);
+          setClientSecret(placeholder);
+        }
+        if (status.current.licenseKey) {
+          setLicenseKey(status.current.licenseKey);
+          setIsLicenseActivated(true);
+        }
+      }
+      setIsConnected(status.isConnected);
+      setConnectedEmail(status.connectedEmail);
+    });
+  }, []);
+
+  const handleConnect = async () => {
+    // Còn giữ nguyên placeholder (không sửa gì) -> gửi rỗng, main tự dùng lại secret đã lưu (xem
+    // connectHanetAccount ở main/ipc/index.ts).
+    const secretToSend = clientSecret === savedSecretPlaceholder ? '' : clientSecret;
+    if (!apiBaseUrl.trim() || !clientId.trim() || (!secretToSend.trim() && !savedSecretPlaceholder)) {
+      setConnectError('Vui lòng nhập đầy đủ Server API, Client ID và Client Secret.');
+      return;
+    }
+    setIsConnecting(true);
+    setConnectError(null);
+    try {
+      const result = await window.hanetImporter.connectHanetAccount({
+        apiBaseUrl: apiBaseUrl.trim(),
+        clientId: clientId.trim(),
+        clientSecret: secretToSend.trim(),
+      });
+      setIsConnected(true);
+      setConnectedEmail(result.email);
+      const newPlaceholder = secretPlaceholder(secretToSend.trim() ? secretToSend.trim().length : clientSecret.length);
+      setSavedSecretPlaceholder(newPlaceholder);
+      setClientSecret(newPlaceholder);
+      setSavedApiBaseUrls((prev) => (prev.includes(apiBaseUrl.trim()) ? prev : [...prev, apiBaseUrl.trim()]));
+      if (result.places.length === 0) {
+        setConnectError('Kết nối thành công nhưng tài khoản này chưa có địa điểm (place) nào.');
+      }
+    } catch (err) {
+      setConnectError(friendlyErrorMessage(err));
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  const handleActivateLicense = async () => {
+    if (!licenseKey.trim()) {
+      setLicenseError('Vui lòng nhập mã license.');
+      return;
+    }
+    setIsActivatingLicense(true);
+    setLicenseError(null);
+    try {
+      await window.hanetImporter.activateLicense({ licenseKey: licenseKey.trim() });
+      setIsLicenseActivated(true);
+      onSaved();
+    } catch (err) {
+      setLicenseError(friendlyErrorMessage(err));
+    } finally {
+      setIsActivatingLicense(false);
+    }
+  };
+
+  return (
+    <div>
+      {isConnected && (
+        <div className="flex items-center justify-between gap-2 mb-5">
+          <span className="flex items-center gap-2 text-sm text-slate-500">
+            <CheckCircle2 size={18} className="text-emerald-600 shrink-0" />
+            Đã kết nối
+          </span>
+          {connectedEmail && <span className="text-base font-semibold text-slate-800">{connectedEmail}</span>}
+        </div>
+      )}
+
+      <label className="block text-sm font-medium text-slate-700 mb-1">Server API</label>
+      <div className="mb-3">
+        <ServerUrlCombobox
+          value={apiBaseUrl}
+          onChange={setApiBaseUrl}
+          savedUrls={
+            savedApiBaseUrls.includes(DEFAULT_API_BASE_URL)
+              ? savedApiBaseUrls
+              : [DEFAULT_API_BASE_URL, ...savedApiBaseUrls]
+          }
+          placeholder={DEFAULT_API_BASE_URL}
+        />
+      </div>
+
+      <label className="block text-sm font-medium text-slate-700 mb-1">Client ID</label>
+      <input
+        value={clientId}
+        onChange={(e) => setClientId(e.target.value)}
+        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+      />
+
+      <label className="block text-sm font-medium text-slate-700 mb-1">Client Secret</label>
+      <input
+        type="password"
+        value={clientSecret}
+        onChange={(e) => setClientSecret(e.target.value)}
+        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+      />
+
+      <button
+        type="button"
+        onClick={handleConnect}
+        disabled={isConnecting}
+        className="w-full flex items-center justify-center gap-2 rounded-xl bg-blue-600 disabled:bg-slate-200 disabled:text-slate-400 text-white font-medium px-4 py-3 mb-4 hover:bg-blue-700 transition-colors"
+      >
+        {isConnecting && <Loader2 size={16} className="animate-spin" />}
+        {isConnecting ? 'Đang kết nối...' : 'Kết nối tài khoản Hanet'}
+      </button>
+
+      {connectError && <p className="text-xs text-rose-600 mb-3">{connectError}</p>}
+
+      <div className="border-t border-slate-100 pt-4 mt-5">
+        <label className="block text-sm font-medium text-slate-700 mb-1">Mã license</label>
+        <div className="flex items-center rounded-lg border border-slate-200 focus-within:ring-2 focus-within:ring-blue-500 mb-1">
+          <input
+            value={licenseKey}
+            onChange={(e) => setLicenseKey(e.target.value)}
+            disabled={isLicenseActivated}
+            className="w-full rounded-lg px-3 py-2 text-sm disabled:bg-slate-50 disabled:text-slate-500 focus:outline-none"
+            placeholder="Mã license được cấp"
+          />
+          {isLicenseActivated ? (
+            <span className="flex items-center gap-1 pr-3 text-xs text-emerald-600 font-medium whitespace-nowrap">
+              <CheckCircle2 size={14} /> Đã kích hoạt
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={handleActivateLicense}
+              disabled={isActivatingLicense}
+              className="rounded-r-lg bg-blue-600 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-medium px-4 py-2 hover:bg-blue-700 transition-colors whitespace-nowrap"
+            >
+              {isActivatingLicense ? 'Đang xác thực...' : 'Xác thực'}
+            </button>
+          )}
+        </div>
+        {licenseError && <p className="text-xs text-rose-600">{licenseError}</p>}
+      </div>
+    </div>
+  );
+}

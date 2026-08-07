@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    "composite": true,
+    "target": "ES2022",
+    // KHÔNG có "node" trong types: renderer chạy trong Chromium sandbox và không được phép dùng API
+    // Node. Trước đây tsconfig chung khai báo types:["node"] nên TypeScript vẫn cho phép viết
+    // `fs.readFile` trong renderer mà không báo lỗi, dù chắc chắn crash lúc chạy.
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noFallthroughCasesInSwitch": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "types": ["vite/client"],
+    "paths": {
+      "@shared/*": ["./src/shared/*"],
+      "@renderer/*": ["./src/renderer/app/*"]
+    }
+  },
+  // src/shared xuất hiện trong cả hai project (node + web) một cách có chủ đích: đó là code chạy ở
+  // cả hai phía. Cả hai project đều noEmit nên không có xung đột output.
+  "include": ["src/renderer/**/*", "src/shared/**/*", "tests/renderer/**/*"]
+}

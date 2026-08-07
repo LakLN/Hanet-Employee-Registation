@@ -1,0 +1,9 @@
+.env
+node_modules/
+out/
+dist/
+release/
+coverage/
+.vscode/
+*.tsbuildinfo
+scripts/generate-license.js
