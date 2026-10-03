@@ -124,7 +124,7 @@ describe('parseEmployeeExcel', () => {
   it('đánh dấu INVALID khi thiếu Họ tên dù có Mã NV', async () => {
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet('NV');
-    sheet.addRow(['Mã NV', 'Họ tên']);
+    sheet.addRow(['Mã NV', 'Họ tên', 'Tên file ảnh']);
     sheet.addRow(['NV003', '']);
 
     const results = await parseEmployeeExcel(await toArrayBuffer(workbook), []);
@@ -138,7 +138,7 @@ describe('parseEmployeeExcel', () => {
     const sheet = workbook.addWorksheet('NV');
     sheet.addRow([]);
     sheet.addRow([]);
-    sheet.addRow(['Mã NV', 'Họ tên']);
+    sheet.addRow(['Mã NV', 'Họ tên', 'Tên file ảnh']);
     sheet.addRow(['NV001', 'Nguyễn Văn A']);
 
     const results = await parseEmployeeExcel(await toArrayBuffer(workbook), []);
@@ -150,7 +150,7 @@ describe('parseEmployeeExcel', () => {
   it('đọc được ô rich text (không trả về "[object Object]")', async () => {
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet('NV');
-    sheet.addRow(['Mã NV', 'Họ tên']);
+    sheet.addRow(['Mã NV', 'Họ tên', 'Tên file ảnh']);
     const row = sheet.addRow(['NV001']);
     row.getCell(2).value = { richText: [{ text: 'Nguyễn' }, { text: ' Văn A' }] };
 
@@ -166,5 +166,14 @@ describe('parseEmployeeExcel', () => {
     sheet.addRow(['Nhân viên', '0901234567']);
 
     await expect(parseEmployeeExcel(await toArrayBuffer(workbook), [])).rejects.toThrow('Không tìm thấy cột bắt buộc');
+  });
+
+  it('ném lỗi khi thiếu cột Tên file ảnh', async () => {
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('NV');
+    sheet.addRow(['Mã NV', 'Họ tên']);
+    sheet.addRow(['NV001', 'Nguyễn Văn A']);
+
+    await expect(parseEmployeeExcel(await toArrayBuffer(workbook), [])).rejects.toThrow('Tên file ảnh');
   });
 });

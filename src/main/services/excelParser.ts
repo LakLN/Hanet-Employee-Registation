@@ -133,6 +133,11 @@ export const parseEmployeeExcel = async (
   if (!columnIndex.employeeId || !columnIndex.name) {
     throw new Error('Không tìm thấy cột bắt buộc: Mã NV hoặc Họ tên trong file Excel. Vui lòng kiểm tra header.');
   }
+  // Ảnh ghép theo đúng tên file ghi trong Excel — thiếu cột này thì không ai có ảnh, nên báo ngay
+  // thay vì để cả bảng hiện "Thiếu ảnh" mà không rõ vì sao.
+  if (!columnIndex.imageFileName) {
+    throw new Error('Không tìm thấy cột bắt buộc: Tên file ảnh trong file Excel. Vui lòng dùng file Excel mẫu.');
+  }
 
   const results: EmployeeRecord[] = [];
 

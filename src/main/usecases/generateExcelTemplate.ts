@@ -23,7 +23,7 @@ export async function generateExcelTemplate(): Promise<string | null> {
     { header: 'Chức vụ', key: 'title', width: 20 },
     { header: 'Giới tính', key: 'sex', width: 12 },
     { header: 'ID Phòng ban', key: 'departmentID', width: 14 },
-    { header: 'Tên file ảnh', key: 'imageFileName', width: 20 },
+    { header: 'Tên file ảnh(*)', key: 'imageFileName', width: 20 },
   ];
   sheet.getRow(1).font = { bold: true };
 
