@@ -32,6 +32,9 @@ function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isPrivacyPolicyOpen, setIsPrivacyPolicyOpen] = useState(false);
   const [activePlaceId, setActivePlaceId] = useState('');
+  // Tăng mỗi khi đóng Cài đặt để ActivePlaceSwitcher mount lại và tải danh sách địa điểm theo kết
+  // nối vừa lưu — nếu không, phải khởi động lại app mới thấy dropdown địa điểm.
+  const [placeSwitcherKey, setPlaceSwitcherKey] = useState(0);
   const [excelFile, setExcelFile] = useState<{ filePath: string; name: string } | null>(null);
   const [imageFolder, setImageFolder] = useState<{ folderPath: string; imageCount: number } | null>(null);
   const [records, setRecords] = useState<EmployeeRecord[]>([]);
@@ -165,7 +168,7 @@ function App() {
               onClick={() => setActiveTab('departments')}
             />
           </div>
-          <ActivePlaceSwitcher onPlaceChange={setActivePlaceId} />
+          <ActivePlaceSwitcher key={placeSwitcherKey} onPlaceChange={setActivePlaceId} />
           <button
             type="button"
             onClick={handleDownloadTemplate}
@@ -312,7 +315,14 @@ function App() {
         onRemoveAllSuccess={handleRemoveAllSuccess}
         gridOrder={gridOrder}
       />
-      {isSettingsOpen && <SettingsModal onClose={() => setIsSettingsOpen(false)} />}
+      {isSettingsOpen && (
+        <SettingsModal
+          onClose={() => {
+            setIsSettingsOpen(false);
+            setPlaceSwitcherKey((k) => k + 1);
+          }}
+        />
+      )}
       {isPrivacyPolicyOpen && <PrivacyPolicyModal onClose={() => setIsPrivacyPolicyOpen(false)} />}
     </div>
   );
