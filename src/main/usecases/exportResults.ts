@@ -1,6 +1,7 @@
 import ExcelJS from 'exceljs';
 import { dialog } from 'electron';
 import { EmployeeRecord, SyncResultItem } from '@shared/types';
+import { resolveStatusMeta } from '@shared/hanetStatus';
 
 const excelStatusConfig: Record<EmployeeRecord['status'], string> = {
   VALID: 'Hợp lệ',
@@ -40,6 +41,11 @@ export async function exportSyncResults(
   if (saveResult.canceled || !saveResult.filePath) return null;
 
   const messageByEmployeeId = new Map(syncResults.map((r) => [r.employeeId, r.message]));
+  // Dòng đã gửi lên Hanet nhưng lỗi (mạng, token, mã lỗi Hanet...) không có registeredStatus — nếu
+  // không xử lý riêng, cột Trạng thái sẽ ghi "Hợp lệ" dù thực tế đăng ký thất bại.
+  const failedIds = new Set(
+    syncResults.filter((r) => resolveStatusMeta(r.returnCode, r.message).tone === 'error').map((r) => r.employeeId),
+  );
 
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet('Danh sách nhân viên');
@@ -69,7 +75,8 @@ export async function exportSyncResults(
       // phone: record.phone,
       // dob: record.dob ?? '',
       // age: record.age ?? '',
-      status: resolveGridStatusLabel(record),
+      status:
+        !record.registeredStatus && failedIds.has(record.employeeId) ? 'Đăng ký lỗi' : resolveGridStatusLabel(record),
       note: record.registeredNote ?? messageByEmployeeId.get(record.employeeId) ?? '',
     });
   });

@@ -41,7 +41,7 @@ function App() {
   const [datasetVersion, setDatasetVersion] = useState(0);
   const [isReading, setIsReading] = useState(false);
 
-  const { toast, notify } = useToast();
+  const { toast, notify, dismiss } = useToast();
   const {
     syncResults,
     syncProgress,
@@ -68,6 +68,9 @@ function App() {
       const parsed = await window.hanetImporter.parseExcel({ excelPath, imageFolderPath });
       setRecords(parsed);
       setDatasetVersion((v) => v + 1);
+      if (parsed.length === 0) {
+        notify('error', 'File Excel không có dòng dữ liệu nào bên dưới dòng tiêu đề (sheet đầu tiên).');
+      }
     } catch (error) {
       notify('error', `Lỗi đọc Excel: ${friendlyErrorMessage(error)}`);
       setRecords([]);
@@ -279,14 +282,18 @@ function App() {
       </main>
 
       {toast && (
-        <div className="fixed right-6 bottom-6 z-50 w-[320px] rounded-2xl border border-slate-200 bg-white p-4 shadow-xl shadow-slate-900/10">
+        <div
+          onClick={dismiss}
+          title="Bấm để đóng"
+          className="fixed right-6 bottom-6 z-50 w-[380px] cursor-pointer rounded-2xl border border-slate-200 bg-white p-4 shadow-xl shadow-slate-900/10"
+        >
           <div className={`flex items-start gap-3 ${toast.type === 'success' ? 'text-emerald-700' : 'text-rose-700'}`}>
             <div
-              className={`mt-0.5 h-2.5 w-2.5 rounded-full ${toast.type === 'success' ? 'bg-emerald-500' : 'bg-rose-500'}`}
+              className={`mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full ${toast.type === 'success' ? 'bg-emerald-500' : 'bg-rose-500'}`}
             />
-            <div>
+            <div className="min-w-0">
               <div className="font-semibold text-sm">{toast.type === 'success' ? 'Thành công' : 'Lỗi'}</div>
-              <div className="text-sm text-slate-600 mt-1">{toast.message}</div>
+              <div className="text-sm text-slate-600 mt-1 break-words select-text">{toast.message}</div>
             </div>
           </div>
         </div>

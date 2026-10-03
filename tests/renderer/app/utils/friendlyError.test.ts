@@ -28,4 +28,14 @@ describe('friendlyErrorMessage', () => {
   it('xử lý được giá trị không phải Error', () => {
     expect(friendlyErrorMessage('chuỗi lỗi thô')).toBe('chuỗi lỗi thô');
   });
+
+  it('bỏ tiền tố lỗi IPC của Electron', () => {
+    const err = new Error("Error invoking remote method 'excel:parse': Error: Không tìm thấy cột bắt buộc");
+    expect(friendlyErrorMessage(err)).toBe('Không tìm thấy cột bắt buộc');
+  });
+
+  it('giữ nguyên thông báo main đã diễn giải sẵn', () => {
+    const msg = 'Không lấy được phiên đăng nhập Hanet. Chi tiết: timeout of 15000ms exceeded';
+    expect(friendlyErrorMessage(new Error(`Error invoking remote method 'x': Error: ${msg}`))).toBe(msg);
+  });
 });

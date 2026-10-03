@@ -49,8 +49,20 @@ const RESIZE_CONCURRENCY = Math.max(1, Math.min(4, os.cpus().length - 1));
 // cũng là giới hạn RAM: tối đa (upload + prefetch) ảnh nằm trong bộ nhớ cùng lúc.
 const IMAGE_PREFETCH = 2;
 
+// Đăng ký bắt buộc phải có place — thiếu thì Hanet chỉ trả lỗi khó hiểu cho TỪNG người, nên chặn
+// ngay từ đầu với thông báo rõ ràng.
+async function getRegisterConfig() {
+  const config = await getHanetConfig();
+  if (!config.placeId) {
+    throw new Error(
+      'Chưa chọn địa điểm (Place). Vui lòng chọn địa điểm ở góc trên màn hình hoặc vào Cài đặt để kết nối lại.',
+    );
+  }
+  return config;
+}
+
 const bulkRunner = new BulkRegistrationRunner({
-  getConfig: getHanetConfig,
+  getConfig: getRegisterConfig,
   prepareImage,
   upload: (record, image, config, signal) => uploadPersonToHanet(record, image, config, 2, signal),
   concurrency: { upload: UPLOAD_CONCURRENCY, resize: RESIZE_CONCURRENCY, prefetch: IMAGE_PREFETCH },
@@ -96,7 +108,7 @@ const handlers: IpcHandlerMap = {
     schema: singleEmployeeInputSchema,
     handle: async (record) => {
       if (record.imagePath) filePolicy.assertAllowed(record.imagePath);
-      const config = await getHanetConfig();
+      const config = await getRegisterConfig();
       const result = await registerPersonToHanet(record, config);
       return { success: result.success, message: result.message, raw: result.raw };
     },

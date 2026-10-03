@@ -1,5 +1,5 @@
 import { CheckCircle2, Loader2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { friendlyErrorMessage } from '../utils/friendlyError';
 import { ServerUrlCombobox } from './ServerUrlCombobox';
 
@@ -38,7 +38,10 @@ export function HanetConnectionSettingsForm({ onSaved }: { onSaved: () => void }
   const [connectError, setConnectError] = useState<string | null>(null);
 
   // Kết nối nhập tay (không OAuth): dùng khi tài khoản chỉ được chia sẻ hoặc server Hanet đặt cục bộ.
-  const [showManual, setShowManual] = useState(false);
+  // Hai cách kết nối ngang hàng: đăng nhập OAuth (cần Internet tới oauth.hanet.com) hoặc dán token
+  // thủ công (dùng cho máy không có Internet / server Hanet nội bộ) — chọn trực tiếp, không giấu sau
+  // một đường link "không đăng nhập được".
+  const [connectMode, setConnectMode] = useState<'oauth' | 'manual'>('oauth');
   const [manualToken, setManualToken] = useState('');
   const [manualPlaceId, setManualPlaceId] = useState('');
   const [usesManualToken, setUsesManualToken] = useState(false);
@@ -46,7 +49,10 @@ export function HanetConnectionSettingsForm({ onSaved }: { onSaved: () => void }
   const [manualError, setManualError] = useState<string | null>(null);
 
   useEffect(() => {
-    window.hanetImporter.getMachineCode().then(setMachineCode).catch(() => undefined);
+    window.hanetImporter
+      .getMachineCode()
+      .then(setMachineCode)
+      .catch(() => undefined);
     window.hanetImporter.getRuntimeConfigStatus().then((status) => {
       if (status.current) {
         setApiBaseUrl(status.current.apiBaseUrl || DEFAULT_API_BASE_URL);
@@ -60,7 +66,7 @@ export function HanetConnectionSettingsForm({ onSaved }: { onSaved: () => void }
         setManualPlaceId(status.current.activePlaceId || '');
         if (status.current.usesManualToken) {
           setUsesManualToken(true);
-          setShowManual(true);
+          setConnectMode('manual');
         }
         if (status.current.licenseKey) {
           setLicenseKey(status.current.licenseKey);
@@ -172,42 +178,53 @@ export function HanetConnectionSettingsForm({ onSaved }: { onSaved: () => void }
         />
       </div>
 
-      <label className="block text-sm font-medium text-slate-700 mb-1">Client ID</label>
-      <input
-        value={clientId}
-        onChange={(e) => setClientId(e.target.value)}
-        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
-      />
+      <label className="block text-sm font-medium text-slate-700 mb-1">Cách kết nối</label>
+      <div className="grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1 mb-3">
+        <ModeButton active={connectMode === 'oauth'} onClick={() => setConnectMode('oauth')}>
+          Đăng nhập tài khoản Hanet
+        </ModeButton>
+        <ModeButton active={connectMode === 'manual'} onClick={() => setConnectMode('manual')}>
+          Nhập Access Token thủ công
+        </ModeButton>
+      </div>
 
-      <label className="block text-sm font-medium text-slate-700 mb-1">Client Secret</label>
-      <input
-        type="password"
-        value={clientSecret}
-        onChange={(e) => setClientSecret(e.target.value)}
-        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
-      />
+      {connectMode === 'oauth' && (
+        <>
+          <p className="text-xs text-slate-400 mb-3">Cần Internet để mở trang đăng nhập Hanet.</p>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Client ID</label>
+          <input
+            value={clientId}
+            onChange={(e) => setClientId(e.target.value)}
+            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
 
-      <button
-        type="button"
-        onClick={handleConnect}
-        disabled={isConnecting}
-        className="w-full flex items-center justify-center gap-2 rounded-xl bg-blue-600 disabled:bg-slate-200 disabled:text-slate-400 text-white font-medium px-4 py-3 mb-4 hover:bg-blue-700 transition-colors"
-      >
-        {isConnecting && <Loader2 size={16} className="animate-spin" />}
-        {isConnecting ? 'Đang kết nối...' : 'Kết nối tài khoản Hanet'}
-      </button>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Client Secret</label>
+          <input
+            type="password"
+            value={clientSecret}
+            onChange={(e) => setClientSecret(e.target.value)}
+            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
 
-      {connectError && <p className="text-xs text-rose-600 mb-3">{connectError}</p>}
+          <button
+            type="button"
+            onClick={handleConnect}
+            disabled={isConnecting}
+            className="w-full flex items-center justify-center gap-2 rounded-xl bg-blue-600 disabled:bg-slate-200 disabled:text-slate-400 text-white font-medium px-4 py-3 mb-3 hover:bg-blue-700 transition-colors"
+          >
+            {isConnecting && <Loader2 size={16} className="animate-spin" />}
+            {isConnecting ? 'Đang kết nối...' : 'Kết nối tài khoản Hanet'}
+          </button>
 
-      <button
-        type="button"
-        onClick={() => setShowManual((v) => !v)}
-        className="text-xs text-blue-600 hover:underline mb-2"
-      >
-        {showManual ? 'Ẩn nhập token thủ công' : 'Không đăng nhập được? Nhập Access Token và Place ID thủ công'}
-      </button>
-      {showManual && (
-        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 mb-3">
+          {connectError && <p className="text-xs text-rose-600 mb-3">{connectError}</p>}
+        </>
+      )}
+
+      {connectMode === 'manual' && (
+        <div className="mb-3">
+          <p className="text-xs text-slate-400 mb-3">
+            Dùng khi máy không có Internet hoặc kết nối tới server Hanet nội bộ (nhập địa chỉ ở ô Server API).
+          </p>
           {usesManualToken && (
             <p className="text-xs text-emerald-600 mb-2">Đang dùng token nhập thủ công (dùng Server API ở trên).</p>
           )}
@@ -229,9 +246,9 @@ export function HanetConnectionSettingsForm({ onSaved }: { onSaved: () => void }
             type="button"
             onClick={handleSaveManual}
             disabled={isSavingManual}
-            className="w-full rounded-lg bg-slate-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-medium px-4 py-2 hover:bg-slate-800 transition-colors"
+            className="w-full rounded-xl bg-blue-600 disabled:bg-slate-200 disabled:text-slate-400 text-white font-medium px-4 py-3 hover:bg-blue-700 transition-colors"
           >
-            {isSavingManual ? 'Đang lưu...' : 'Lưu token thủ công'}
+            {isSavingManual ? 'Đang lưu...' : 'Lưu kết nối'}
           </button>
           {manualError && <p className="text-xs text-rose-600 mt-2">{manualError}</p>}
           <p className="text-xs text-slate-400 mt-2">Token có hạn: hết hạn thì dán lại token mới.</p>
@@ -272,5 +289,19 @@ export function HanetConnectionSettingsForm({ onSaved }: { onSaved: () => void }
         {licenseError && <p className="text-xs text-rose-600">{licenseError}</p>}
       </div>
     </div>
+  );
+}
+
+function ModeButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+        active ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+      }`}
+    >
+      {children}
+    </button>
   );
 }

@@ -107,6 +107,9 @@ export function useBulkSync(
         notify(summary.failed > 0 ? 'error' : 'success', `Hoàn tất: ${parts.join(', ')}.`);
       }
     } catch (error) {
+      // Lô bị chặn trước khi chạy (thiếu place, mất token...) — xoá tiến độ để panel không treo ở
+      // "Đang xử lý 0/N" như thể vẫn đang chạy.
+      setSyncProgress({ current: 0, total: 0 });
       notify('error', `Lỗi đăng ký: ${friendlyErrorMessage(error)}`);
     } finally {
       setIsSyncing(false);

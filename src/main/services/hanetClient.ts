@@ -1,9 +1,10 @@
-import https from 'https';
+import type https from 'https';
 import axios from 'axios';
 import FormData from 'form-data';
 import { resizeForHanet } from './imageProcessor';
 import logger from '../logger';
 import { getRuntimeConfig } from './runtimeConfig';
+import { httpsAgentFor } from './hanetHttp';
 import { EmployeeRecord, HanetApiResponse, HanetConfig, SingleEmployeeInput } from '@shared/types';
 
 export type HanetRegisterInput = EmployeeRecord | SingleEmployeeInput;
@@ -24,9 +25,7 @@ function removePersonUrl(): string {
   return `${apiBaseUrl().replace(/\/+$/, '')}/person/removePersonByID`;
 }
 
-const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 8, timeout: 30000 });
-
-function agentStats() {
+function agentStats(httpsAgent: https.Agent) {
   const count = (dict: NodeJS.ReadOnlyDict<unknown[]>) =>
     Object.values(dict).reduce((sum: number, arr) => sum + (arr?.length ?? 0), 0);
   return {
@@ -43,6 +42,74 @@ export interface RegisterResult {
   raw?: HanetApiResponse;
   durationMs?: number;
   cancelled?: boolean;
+  /** Thất bại ở tầng mạng (không nhận được phản hồi nào từ Hanet) — dùng để dừng sớm cả lô khi
+   *  máy mất kết nối/bị firewall chặn, thay vì thử lần lượt từng người tới hết timeout. */
+  networkError?: boolean;
+}
+
+/**
+ * Diễn giải lỗi request không có phản hồi hợp lệ từ Hanet thành câu tiếng Việt, giữ mã kỹ thuật gốc
+ * trong ngoặc để Maxcom đối chiếu khi khách chụp màn hình gửi lại.
+ */
+export function describeRequestError(err: unknown): { message: string; networkError: boolean } {
+  const axiosErr = axios.isAxiosError(err) ? err : null;
+  const status = axiosErr?.response?.status;
+  const code = axiosErr?.code ?? (err as NodeJS.ErrnoException | null)?.code ?? '';
+  const raw = err instanceof Error ? err.message : String(err);
+  const detail = `(${[code, raw].filter(Boolean).join(': ')})`;
+
+  if (status === 401 || status === 403) {
+    return {
+      message: `Hanet từ chối truy cập — token hết hạn hoặc không hợp lệ. Vào Cài đặt để kết nối lại. ${detail}`,
+      networkError: false,
+    };
+  }
+  if (status === 404) {
+    return {
+      message: `Sai địa chỉ Server API (không tìm thấy endpoint). Kiểm tra lại Server API trong Cài đặt. ${detail}`,
+      networkError: false,
+    };
+  }
+  if (status === 429) {
+    return {
+      message: `Hanet đang giới hạn số request (quá nhiều yêu cầu). Vui lòng thử lại sau ít phút. ${detail}`,
+      networkError: false,
+    };
+  }
+  if (status && status >= 500) {
+    return { message: `Máy chủ Hanet đang lỗi (HTTP ${status}). Vui lòng thử lại sau. ${detail}`, networkError: false };
+  }
+  if (status) {
+    return { message: `Hanet trả về lỗi HTTP ${status}. ${detail}`, networkError: false };
+  }
+  if (['ENOTFOUND', 'EAI_AGAIN'].includes(code)) {
+    return {
+      message: `Không phân giải được địa chỉ máy chủ Hanet — máy không có Internet hoặc DNS bị chặn. ${detail}`,
+      networkError: true,
+    };
+  }
+  if (code === 'ECONNABORTED' || code === 'ETIMEDOUT' || /timeout/i.test(raw)) {
+    return {
+      message: `Quá thời gian chờ phản hồi từ Hanet — mạng chậm hoặc bị firewall chặn. ${detail}`,
+      networkError: true,
+    };
+  }
+  if (code === 'ECONNREFUSED') {
+    return {
+      message: `Máy chủ Hanet từ chối kết nối — kiểm tra Server API/firewall/proxy. ${detail}`,
+      networkError: true,
+    };
+  }
+  if (code === 'ECONNRESET' || /socket hang up/i.test(raw)) {
+    return { message: `Kết nối tới Hanet bị ngắt giữa chừng. ${detail}`, networkError: true };
+  }
+  if (/certificate|self.signed|UNABLE_TO_VERIFY/i.test(`${code} ${raw}`)) {
+    return {
+      message: `Chứng chỉ SSL không hợp lệ — thường do proxy/firewall công ty kiểm tra HTTPS. Cần mở chặn cho tên miền Hanet. ${detail}`,
+      networkError: true,
+    };
+  }
+  return { message: `Lỗi kết nối tới Hanet. ${detail}`, networkError: !status };
 }
 
 export type PreparedImage = { ok: true; buffer: Buffer } | { ok: false; failure: RegisterResult };
@@ -171,7 +238,7 @@ export async function uploadPersonToHanet(
         // lớn/mạng chậm nhất từng thấy, nhưng cắt sớm hơn nhiều khi thực sự bị treo.
         timeout: 20000,
         signal,
-        httpsAgent,
+        httpsAgent: httpsAgentFor(registerUrl()),
       });
 
       const durationMs = Date.now() - startedAt;
@@ -235,7 +302,7 @@ export async function uploadPersonToHanet(
       // tái sử dụng trong khi đã "chết" phía server (request test riêng lẻ, không dùng keep-alive
       // pool dùng chung, sẽ không gặp vấn đề này dù cùng ảnh/cùng payload).
       logger.error(
-        `${tag} -> lỗi request (attempt ${attempt + 1}/${maxRetry + 1}) | HTTP ${status ?? 'n/a'} | ${durationMs}ms | code=${code ?? 'n/a'} errno=${errno ?? 'n/a'} syscall=${syscall ?? 'n/a'} | ${message} | agent: ${JSON.stringify(agentStats())}`,
+        `${tag} -> lỗi request (attempt ${attempt + 1}/${maxRetry + 1}) | HTTP ${status ?? 'n/a'} | ${durationMs}ms | code=${code ?? 'n/a'} errno=${errno ?? 'n/a'} syscall=${syscall ?? 'n/a'} | ${message} | agent: ${JSON.stringify(agentStats(httpsAgentFor(registerUrl())))}`,
         axiosErr?.response?.data ?? '',
       );
       const isTimeout = code === 'ECONNABORTED' || /timeout/i.test(message || '');
@@ -246,11 +313,21 @@ export async function uploadPersonToHanet(
     }
   }
 
+  if (lastResponseData?.returnMessage) {
+    return {
+      success: false,
+      message: lastResponseData.returnMessage,
+      employeeId: record.employeeId,
+      raw: lastResponseData,
+    };
+  }
+  const described = describeRequestError(lastError ?? new Error('Lỗi không xác định'));
   return {
     success: false,
-    message: lastResponseData?.returnMessage || lastError?.message || 'Lỗi không xác định',
+    message: described.message,
     employeeId: record.employeeId,
     raw: lastResponseData,
+    networkError: described.networkError,
   };
 }
 
@@ -270,6 +347,7 @@ export async function removePersonById(
     const response = await axios.post<HanetApiResponse>(removePersonUrl(), body.toString(), {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       timeout: 15000,
+      httpsAgent: httpsAgentFor(removePersonUrl()),
     });
     const data = response.data;
     if (data?.returnCode === 1) {
@@ -279,13 +357,10 @@ export async function removePersonById(
     logger.warn(`[Hanet] Xoá person ${personID} thất bại | returnCode=${data?.returnCode} | ${data?.returnMessage}`);
     return { success: false, message: data?.returnMessage || 'Hanet trả về lỗi không xác định' };
   } catch (err: unknown) {
-    const detail = axios.isAxiosError<HanetApiResponse>(err)
-      ? (err.response?.data?.returnMessage ?? err.message)
-      : err instanceof Error
-        ? err.message
-        : String(err);
-    logger.error(`[Hanet] Lỗi khi xoá person ${personID}:`, detail);
-    return { success: false, message: typeof detail === 'string' ? detail : 'Lỗi không xác định' };
+    const hanetMessage = axios.isAxiosError<HanetApiResponse>(err) ? err.response?.data?.returnMessage : undefined;
+    const detail = hanetMessage || describeRequestError(err).message;
+    logger.error(`[Hanet] Lỗi khi xoá person ${personID}:`, err instanceof Error ? err.message : err);
+    return { success: false, message: detail };
   }
 }
 

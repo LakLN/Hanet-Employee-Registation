@@ -1,5 +1,6 @@
 import axios from 'axios';
 import logger from '../logger';
+import { httpsAgentFor } from './hanetHttp';
 import { HanetDepartment } from '../../shared/types';
 
 function departmentUrl(baseUrl: string, path: string): string {
@@ -61,6 +62,7 @@ export async function listDepartments(
     {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       timeout: 15000,
+      httpsAgent: httpsAgentFor(baseUrl),
     },
   );
 
@@ -92,6 +94,7 @@ export async function createDepartment(
     {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       timeout: 15000,
+      httpsAgent: httpsAgentFor(baseUrl),
     },
   );
 

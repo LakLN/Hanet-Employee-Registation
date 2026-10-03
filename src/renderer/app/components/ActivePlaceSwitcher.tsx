@@ -1,7 +1,7 @@
 import { HanetPlace } from '@shared/types';
-import { MapPin } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { PlaceDropdown } from './PlaceDropdown';
+import { friendlyErrorMessage } from '../utils/friendlyError';
 
 /**
  * Dropdown đổi Place ID nhanh, đặt ngay hàng với tab chính — đổi giá trị là lưu xuống máy ngay
@@ -13,6 +13,7 @@ import { PlaceDropdown } from './PlaceDropdown';
 export function ActivePlaceSwitcher({ onPlaceChange }: { onPlaceChange?: (placeId: string) => void } = {}) {
   const [places, setPlaces] = useState<HanetPlace[]>([]);
   const [placeId, setPlaceId] = useState('');
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     window.hanetImporter.getRuntimeConfigStatus().then((status) => {
@@ -31,9 +32,10 @@ export function ActivePlaceSwitcher({ onPlaceChange }: { onPlaceChange?: (placeI
             void window.hanetImporter.saveActivePlaceId(firstPlace.placeID);
           }
         })
-        .catch(() => {
-          // Im lặng bỏ qua: đây chỉ là tiện ích đổi nhanh, lỗi mạng ở đây không đáng để chặn UI
-          // chính — người dùng vẫn có thể vào Cài đặt để kết nối lại nếu cần.
+        .catch((err) => {
+          // Không chặn UI chính, nhưng phải hiện ra: nếu im lặng, khách không biết vì sao không có
+          // dropdown địa điểm (token hết hạn, mất mạng...).
+          setLoadError(friendlyErrorMessage(err));
         });
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -42,9 +44,18 @@ export function ActivePlaceSwitcher({ onPlaceChange }: { onPlaceChange?: (placeI
   const handleChange = (newPlaceId: string) => {
     setPlaceId(newPlaceId);
     onPlaceChange?.(newPlaceId);
-    void window.hanetImporter.saveActivePlaceId(newPlaceId);
+    window.hanetImporter
+      .saveActivePlaceId(newPlaceId)
+      .catch((err) => setLoadError(`Không lưu được địa điểm đã chọn: ${friendlyErrorMessage(err)}`));
   };
 
+  if (loadError && places.length === 0) {
+    return (
+      <p className="max-w-xs text-xs text-rose-600 break-words" title={loadError}>
+        Không tải được danh sách địa điểm: {loadError}
+      </p>
+    );
+  }
   if (places.length === 0) return null;
 
   return (

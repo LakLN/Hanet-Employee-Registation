@@ -1,5 +1,6 @@
 import axios from 'axios';
 import logger from '../logger';
+import { httpsAgentFor } from './hanetHttp';
 import { HanetPlace } from '../../shared/types';
 
 // POST /place/getPlaces: lấy danh sách địa điểm (place) của account đã cấp accessToken — chỉ trả
@@ -28,6 +29,7 @@ export async function listPlaces(baseUrl: string, accessToken: string): Promise<
   const response = await axios.post<RawPlacesResponse>(placesUrl(baseUrl), body.toString(), {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     timeout: 15000,
+    httpsAgent: httpsAgentFor(baseUrl),
   });
 
   const data = response.data;

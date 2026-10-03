@@ -56,6 +56,19 @@ export function runOAuthLogin(clientId: string, parent: BrowserWindow): Promise<
     popup.webContents.on('will-navigate', (_event, url) => tryExtractCode(url));
     popup.webContents.on('will-redirect', (_event, url) => tryExtractCode(url));
     popup.on('closed', () => finish(() => reject(new Error('Đã đóng cửa sổ đăng nhập trước khi hoàn tất.'))));
+    // Không tải được trang đăng nhập (mất mạng, firewall chặn oauth.hanet.com...) — popup sẽ không bao
+    // giờ hiện lên và nút "Đang kết nối..." treo mãi nếu không bắt sự kiện này. Bỏ qua lỗi của chính
+    // redirect_uri (localhost) vì đó là điều hướng ta chủ động chặn ở trên.
+    popup.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+      if (!isMainFrame || errorCode === -3 || validatedURL.startsWith(REDIRECT_URI)) return;
+      finish(() =>
+        reject(
+          new Error(
+            `Không mở được trang đăng nhập Hanet — kiểm tra kết nối Internet/firewall (${errorDescription} ${errorCode}).`,
+          ),
+        ),
+      );
+    });
 
     popup.once('ready-to-show', () => popup.show());
     void popup.loadURL(buildAuthorizeUrl(clientId, REDIRECT_URI));

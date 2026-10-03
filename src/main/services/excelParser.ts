@@ -41,7 +41,17 @@ export const parseEmployeeExcel = async (
   imageFiles: Array<{ filePath: string; fileName: string }>,
 ): Promise<EmployeeRecord[]> => {
   const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(fileBuffer);
+  try {
+    await workbook.xlsx.load(fileBuffer);
+  } catch (err) {
+    // ExcelJS chỉ báo lỗi kỹ thuật kiểu "Corrupted zip" — thường do file .xls cũ đổi đuôi, file đặt
+    // mật khẩu hoặc file hỏng.
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `Không đọc được file Excel. File phải là .xlsx thật (không phải .xls đổi đuôi), không đặt mật khẩu và không bị hỏng — hãy mở bằng Excel rồi "Lưu thành" .xlsx. Chi tiết: ${detail}`,
+      { cause: err },
+    );
+  }
   const [worksheet] = workbook.worksheets;
   if (!worksheet) {
     throw new Error('File Excel không có sheet nào để đọc.');

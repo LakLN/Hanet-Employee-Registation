@@ -6,13 +6,13 @@
     <!--
       Renderer chỉ được nạp tài nguyên từ chính bundle của app: không script ngoài, không CSS ngoài,
       không gọi mạng trực tiếp (mọi request tới Hanet đều đi qua main process). Ảnh cho phép thêm
-      safe-file: (ảnh cục bộ người dùng đã chọn) và ảnh avatar do Hanet trả về trong hộp thoại
+      safe-file: (ảnh cục bộ người dùng đã chọn) và ảnh avatar do server Hanet (cloud hoặc server nội bộ, có thể là IP LAN) trả về trong hộp thoại
       "FaceID đã tồn tại". 'unsafe-inline' cho style là bắt buộc với Tailwind/React inline style;
       script KHÔNG có 'unsafe-inline' nên chuỗi dữ liệu không thể trở thành mã chạy được.
     -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: safe-file: https://*.hanet.ai https://*.hanet.com; font-src 'self' data:; connect-src 'self'; form-action 'none'; base-uri 'none'; object-src 'none'; frame-src 'none'"
+      content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: safe-file: https: http:; font-src 'self' data:; connect-src 'self'; form-action 'none'; base-uri 'none'; object-src 'none'; frame-src 'none'"
     />
     <title>Hanet Employee Registration</title>
   </head>

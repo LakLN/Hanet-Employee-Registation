@@ -121,6 +121,17 @@ async function requestToken(
   return state;
 }
 
+// Lỗi từ oauth.hanet.com thường chỉ là "Request failed with status code 400" — kèm body phản hồi
+// (vd {"error":"invalid_client"}) để biết sai ở đâu.
+function describeTokenError(err: unknown): string {
+  if (axios.isAxiosError(err)) {
+    const body = err.response?.data;
+    const bodyText = body ? (typeof body === 'string' ? body : JSON.stringify(body)) : '';
+    return [err.code, err.message, bodyText].filter(Boolean).join(' | ').slice(0, 300);
+  }
+  return err instanceof Error ? err.message : String(err);
+}
+
 function requestNewToken(refreshToken: string): Promise<TokenState> {
   const clientId = getRuntimeConfig()?.clientId ?? '';
   const clientSecret = getRuntimeConfig()?.clientSecret ?? '';
@@ -151,7 +162,21 @@ export async function exchangeCodeForToken(
     client_id: clientId,
     client_secret: clientSecret,
   });
-  const state = await requestToken(body, 'authorization_code');
+  let state: TokenState;
+  try {
+    state = await requestToken(body, 'authorization_code');
+  } catch (err: unknown) {
+    logger.error(
+      '[HanetOAuth] Lỗi đổi authorization code lấy token:',
+      axios.isAxiosError(err) ? (err.response?.data ?? err.message) : err,
+    );
+    throw new Error(
+      `Đăng nhập Hanet thất bại — kiểm tra lại Client ID/Client Secret. Chi tiết: ${describeTokenError(err)}`,
+      {
+        cause: err,
+      },
+    );
+  }
   cached = state;
   persistState(state);
   return { accessToken: state.accessToken, refreshToken: state.refreshToken, email: decodeJwtEmail(state.accessToken) };
@@ -244,7 +269,12 @@ export async function getAccessToken(): Promise<string> {
           ? err.message
           : err;
       logger.error('[HanetOAuth] Lỗi làm mới access token:', detail);
-      if (!cached.accessToken) throw err;
+      if (!cached.accessToken) {
+        throw new Error(
+          `Không lấy được phiên đăng nhập Hanet. Vui lòng vào Cài đặt để kết nối lại tài khoản. Chi tiết: ${describeTokenError(err)}`,
+          { cause: err },
+        );
+      }
     }
   }
 

@@ -21,6 +21,7 @@ export function useToast(durationMs = 4000) {
   }, [toast, durationMs]);
 
   const notify = (type: ToastType, message: string) => setToast({ type, message });
+  const dismiss = () => setToast(null);
 
-  return { toast, notify };
+  return { toast, notify, dismiss };
 }
