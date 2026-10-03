@@ -2,6 +2,7 @@ import {
   ActivateLicenseInput,
   ConnectHanetAccountInput,
   ConnectHanetAccountResult,
+  ConnectWithTokenInput,
   EmployeeRecord,
   HanetApiResponse,
   HanetDepartment,
@@ -33,6 +34,7 @@ export const IPC = {
   getRuntimeConfigStatus: 'config:get-runtime-status',
   activateLicense: 'config:activate-license',
   connectHanetAccount: 'config:connect-hanet-account',
+  connectWithToken: 'config:connect-with-token',
   listSavedPlaces: 'config:list-saved-places',
   saveActivePlaceId: 'config:save-active-place-id',
   listDepartments: 'hanet:list-departments',
@@ -143,6 +145,7 @@ export type IpcApi = {
   [IPC.getRuntimeConfigStatus]: { arg: void; result: RuntimeConfigStatus };
   [IPC.activateLicense]: { arg: ActivateLicenseInput; result: void };
   [IPC.connectHanetAccount]: { arg: ConnectHanetAccountInput; result: ConnectHanetAccountResult };
+  [IPC.connectWithToken]: { arg: ConnectWithTokenInput; result: void };
   [IPC.listSavedPlaces]: { arg: void; result: ListSavedPlacesResult };
   [IPC.saveActivePlaceId]: { arg: string; result: void };
   [IPC.listDepartments]: { arg: ListDepartmentsInput; result: ListDepartmentsResult };
@@ -176,6 +179,7 @@ export interface HanetImporterBridge {
   getRuntimeConfigStatus: () => Promise<IpcApi[typeof IPC.getRuntimeConfigStatus]['result']>;
   activateLicense: (input: ActivateLicenseInput) => Promise<IpcApi[typeof IPC.activateLicense]['result']>;
   connectHanetAccount: (input: ConnectHanetAccountInput) => Promise<IpcApi[typeof IPC.connectHanetAccount]['result']>;
+  connectWithToken: (input: ConnectWithTokenInput) => Promise<IpcApi[typeof IPC.connectWithToken]['result']>;
   listSavedPlaces: () => Promise<IpcApi[typeof IPC.listSavedPlaces]['result']>;
   saveActivePlaceId: (placeId: string) => Promise<IpcApi[typeof IPC.saveActivePlaceId]['result']>;
   listDepartments: (input: ListDepartmentsInput) => Promise<IpcApi[typeof IPC.listDepartments]['result']>;

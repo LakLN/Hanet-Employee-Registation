@@ -90,6 +90,8 @@ export interface RuntimeConfigStatus {
     clientSecretLength: number;
     activePlaceId?: string;
     savedApiBaseUrls: string[];
+    /** Đang dùng access token nhập tay (không qua OAuth). */
+    usesManualToken: boolean;
   } | null;
 }
 
@@ -102,6 +104,12 @@ export interface ConnectHanetAccountInput {
   apiBaseUrl: string;
   clientId: string;
   clientSecret: string;
+}
+
+export interface ConnectWithTokenInput {
+  apiBaseUrl: string;
+  accessToken: string;
+  placeId: string;
 }
 
 export interface ConnectHanetAccountResult {

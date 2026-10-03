@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { X, Eye, Loader2, Trash2, CheckCircle2, AlertTriangle, XCircle } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { X, Eye, Loader2, Trash2, RotateCcw, CheckCircle2, AlertTriangle, XCircle } from 'lucide-react';
 import { SyncResultItem } from '@shared/types';
 import { resolveStatusMeta, StatusMeta } from '@shared/hanetStatus';
 import { DuplicatePersonModal } from './DuplicatePersonModal';
@@ -10,6 +10,9 @@ interface Props {
   results: SyncResultItem[];
   progress: { current: number; total: number };
   current?: Array<{ employeeId: string; name: string }>;
+  isSyncing?: boolean;
+  onRetryPerson?: (item: SyncResultItem) => void;
+  onRetryFailed?: () => void;
   removingIds?: Set<string>;
   onRemovePerson?: (item: SyncResultItem) => void;
   onRemoveAllSuccess?: () => void;
@@ -43,17 +46,17 @@ export function SyncResultsPanel({
   results,
   progress,
   current = [],
+  isSyncing = false,
+  onRetryPerson,
+  onRetryFailed,
   removingIds,
   onRemovePerson,
   onRemoveAllSuccess,
   gridOrder,
 }: Props) {
   const [activeItem, setActiveItem] = useState<SyncResultItem | null>(null);
-  const listEndRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (open) listEndRef.current?.scrollIntoView({ block: 'end' });
-  }, [results.length, open, current.length]);
+  // Cố ý KHÔNG tự cuộn xuống cuối khi có kết quả mới: mỗi kết quả về mà cuộn một lần sẽ làm giật
+  // UI và giành mất vị trí người dùng đang xem.
 
   // Kết quả hoàn tất theo thứ tự xử lý song song (không cố định giữa các lần chạy) — sắp lại theo
   // đúng thứ tự Mã NV trong Data Grid để dễ đối chiếu qua lại giữa hai nơi. Record không có trong
@@ -141,6 +144,21 @@ export function SyncResultsPanel({
           </div>
         )}
 
+        {onRetryFailed && tally.failed > 0 && (
+          <div className="px-5 py-2.5 border-b border-slate-100 shrink-0">
+            <button
+              type="button"
+              onClick={onRetryFailed}
+              disabled={isSyncing}
+              title="Gửi lại các nhân viên đăng ký thất bại"
+              className="flex items-center justify-center gap-1.5 w-full rounded-lg border border-blue-200 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 transition-colors disabled:opacity-50"
+            >
+              <RotateCcw size={13} />
+              Thử lại {tally.failed} người thất bại
+            </button>
+          </div>
+        )}
+
         {onRemoveAllSuccess && successCount > 0 && (
           <div className="px-5 py-2.5 border-b border-slate-100 shrink-0">
             <button
@@ -172,18 +190,20 @@ export function SyncResultsPanel({
                     name={item.name}
                     employeeId={item.employeeId}
                     meta={meta}
-                    note={meta.tone !== 'success' ? meta.label : undefined}
+                    note={meta.tone !== 'success' ? describeResult(item, meta) : undefined}
                     durationMs={item.durationMs}
                     hasExisting={!!item.existingPerson}
                     onViewExisting={() => setActiveItem(item)}
                     isRemoving={isRemoving}
+                    onRetry={
+                      meta.tone === 'error' && onRetryPerson && !isSyncing ? () => onRetryPerson(item) : undefined
+                    }
                     onRemove={item.personID && onRemovePerson ? () => onRemovePerson(item) : undefined}
                   />
                 );
               })}
             </div>
           )}
-          <div ref={listEndRef} />
         </div>
       </aside>
 
@@ -197,6 +217,13 @@ export function SyncResultsPanel({
       )}
     </>
   );
+}
+
+// Hiện đúng message Hanet trả về (kèm mã) thay vì nhãn tự dịch theo mã lỗi — chỉ rơi về nhãn khi
+// Hanet không trả message nào (vd lỗi mạng/timeout phía app).
+function describeResult(item: SyncResultItem, meta: StatusMeta): string {
+  const message = item.message?.trim() || meta.label;
+  return item.returnCode !== undefined ? `[${item.returnCode}] ${message}` : message;
 }
 
 function SummaryPill({ count, label, tone }: { count: number; label: string; tone: StatusMeta['tone'] }) {
@@ -219,6 +246,7 @@ interface ResultRowProps {
   hasExisting?: boolean;
   onViewExisting?: () => void;
   isRemoving?: boolean;
+  onRetry?: () => void;
   onRemove?: () => void;
 }
 
@@ -234,8 +262,10 @@ function ResultRow({
   hasExisting,
   onViewExisting,
   isRemoving,
+  onRetry,
   onRemove,
 }: ResultRowProps) {
+  const [expanded, setExpanded] = useState(false);
   const style = pending
     ? { bar: 'bg-blue-500', iconBg: 'bg-blue-50', iconColor: 'text-blue-600', icon: Loader2 }
     : toneStyle[meta!.tone];
@@ -271,6 +301,16 @@ function ResultRow({
                     <Eye size={14} />
                   </button>
                 )}
+                {onRetry && (
+                  <button
+                    type="button"
+                    onClick={onRetry}
+                    title="Thử lại"
+                    className="flex items-center gap-1 rounded-md border border-blue-200 px-1.5 py-1 text-blue-500 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                  >
+                    <RotateCcw size={14} />
+                  </button>
+                )}
                 {onRemove && (
                   <button
                     type="button"
@@ -286,7 +326,15 @@ function ResultRow({
             )}
           </div>
         </div>
-        {!pending && note && <div className="text-xs text-slate-500 mt-1 line-clamp-2">{note}</div>}
+        {!pending && note && (
+          <div
+            onClick={() => setExpanded((v) => !v)}
+            title={expanded ? 'Thu gọn' : 'Bấm để xem đầy đủ'}
+            className={`text-xs text-slate-500 mt-1 cursor-pointer ${expanded ? '' : 'line-clamp-2'}`}
+          >
+            {note}
+          </div>
+        )}
       </div>
     </div>
   );

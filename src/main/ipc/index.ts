@@ -9,6 +9,7 @@ import {
   needsRuntimeConfig,
   saveActivePlaceId,
   saveConnectionConfig,
+  saveManualConnection,
 } from '../services/runtimeConfig';
 import { exchangeCodeForToken, getAccessToken, getConnectedEmail, hasStoredToken } from '../services/hanetOAuth';
 import { REDIRECT_URI, runOAuthLogin } from '../services/hanetOAuthWindow';
@@ -25,6 +26,7 @@ import {
   activateLicenseInputSchema,
   activePlaceIdInputSchema,
   connectHanetAccountInputSchema,
+  connectWithTokenInputSchema,
   createDepartmentInputSchema,
   employeeRecordsSchema,
   exportResultsInputSchema,
@@ -123,6 +125,7 @@ const handlers: IpcHandlerMap = {
               clientSecretLength: config.clientSecret?.length ?? 0,
               activePlaceId: config.activePlaceId,
               savedApiBaseUrls: config.savedApiBaseUrls ?? [],
+              usesManualToken: !!config.manualAccessToken,
             }
           : null,
       };
@@ -152,6 +155,17 @@ const handlers: IpcHandlerMap = {
       saveConnectionConfig({ apiBaseUrl: input.apiBaseUrl, clientId: input.clientId, clientSecret });
       const places = await listPlaces(input.apiBaseUrl, accessToken);
       return { places, email };
+    },
+  },
+
+  [IPC.connectWithToken]: {
+    schema: connectWithTokenInputSchema,
+    handle: (input) => {
+      saveManualConnection({
+        apiBaseUrl: input.apiBaseUrl.trim(),
+        accessToken: input.accessToken.trim(),
+        placeId: input.placeId.trim(),
+      });
     },
   },
 

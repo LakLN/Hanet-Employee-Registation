@@ -35,6 +35,7 @@ const bridge: HanetImporterBridge = {
   getRuntimeConfigStatus: () => invoke(IPC.getRuntimeConfigStatus),
   activateLicense: (input) => invoke(IPC.activateLicense, input),
   connectHanetAccount: (input) => invoke(IPC.connectHanetAccount, input),
+  connectWithToken: (input) => invoke(IPC.connectWithToken, input),
   listSavedPlaces: () => invoke(IPC.listSavedPlaces),
   saveActivePlaceId: (placeId) => invoke(IPC.saveActivePlaceId, placeId),
   listDepartments: (input) => invoke(IPC.listDepartments, input),

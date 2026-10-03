@@ -36,6 +36,14 @@ export function HanetConnectionSettingsForm({ onSaved }: { onSaved: () => void }
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
 
+  // Kết nối nhập tay (không OAuth): dùng khi tài khoản chỉ được chia sẻ hoặc server Hanet đặt cục bộ.
+  const [showManual, setShowManual] = useState(false);
+  const [manualToken, setManualToken] = useState('');
+  const [manualPlaceId, setManualPlaceId] = useState('');
+  const [usesManualToken, setUsesManualToken] = useState(false);
+  const [isSavingManual, setIsSavingManual] = useState(false);
+  const [manualError, setManualError] = useState<string | null>(null);
+
   useEffect(() => {
     window.hanetImporter.getRuntimeConfigStatus().then((status) => {
       if (status.current) {
@@ -46,6 +54,11 @@ export function HanetConnectionSettingsForm({ onSaved }: { onSaved: () => void }
           const placeholder = secretPlaceholder(status.current.clientSecretLength);
           setSavedSecretPlaceholder(placeholder);
           setClientSecret(placeholder);
+        }
+        setManualPlaceId(status.current.activePlaceId || '');
+        if (status.current.usesManualToken) {
+          setUsesManualToken(true);
+          setShowManual(true);
         }
         if (status.current.licenseKey) {
           setLicenseKey(status.current.licenseKey);
@@ -86,6 +99,30 @@ export function HanetConnectionSettingsForm({ onSaved }: { onSaved: () => void }
       setConnectError(friendlyErrorMessage(err));
     } finally {
       setIsConnecting(false);
+    }
+  };
+
+  const handleSaveManual = async () => {
+    if (!apiBaseUrl.trim() || !manualToken.trim() || !manualPlaceId.trim()) {
+      setManualError('Vui lòng nhập đủ Server API, Access Token và Place ID.');
+      return;
+    }
+    setIsSavingManual(true);
+    setManualError(null);
+    try {
+      await window.hanetImporter.connectWithToken({
+        apiBaseUrl: apiBaseUrl.trim(),
+        accessToken: manualToken.trim(),
+        placeId: manualPlaceId.trim(),
+      });
+      setUsesManualToken(true);
+      setIsConnected(true);
+      setManualToken('');
+      setSavedApiBaseUrls((prev) => (prev.includes(apiBaseUrl.trim()) ? prev : [...prev, apiBaseUrl.trim()]));
+    } catch (err) {
+      setManualError(friendlyErrorMessage(err));
+    } finally {
+      setIsSavingManual(false);
     }
   };
 
@@ -159,6 +196,45 @@ export function HanetConnectionSettingsForm({ onSaved }: { onSaved: () => void }
       </button>
 
       {connectError && <p className="text-xs text-rose-600 mb-3">{connectError}</p>}
+
+      <button
+        type="button"
+        onClick={() => setShowManual((v) => !v)}
+        className="text-xs text-blue-600 hover:underline mb-2"
+      >
+        {showManual ? 'Ẩn nhập token thủ công' : 'Không đăng nhập được? Nhập Access Token và Place ID thủ công'}
+      </button>
+      {showManual && (
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 mb-3">
+          {usesManualToken && (
+            <p className="text-xs text-emerald-600 mb-2">Đang dùng token nhập thủ công (dùng Server API ở trên).</p>
+          )}
+          <label className="block text-sm font-medium text-slate-700 mb-1">Access Token</label>
+          <input
+            type="password"
+            value={manualToken}
+            onChange={(e) => setManualToken(e.target.value)}
+            placeholder={usesManualToken ? 'Đã lưu — nhập token mới để thay' : 'Dán Access Token'}
+            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <label className="block text-sm font-medium text-slate-700 mb-1">Place ID</label>
+          <input
+            value={manualPlaceId}
+            onChange={(e) => setManualPlaceId(e.target.value)}
+            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <button
+            type="button"
+            onClick={handleSaveManual}
+            disabled={isSavingManual}
+            className="w-full rounded-lg bg-slate-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-medium px-4 py-2 hover:bg-slate-800 transition-colors"
+          >
+            {isSavingManual ? 'Đang lưu...' : 'Lưu token thủ công'}
+          </button>
+          {manualError && <p className="text-xs text-rose-600 mt-2">{manualError}</p>}
+          <p className="text-xs text-slate-400 mt-2">Token có hạn: hết hạn thì dán lại token mới.</p>
+        </div>
+      )}
 
       <div className="border-t border-slate-100 pt-4 mt-5">
         <label className="block text-sm font-medium text-slate-700 mb-1">Mã license</label>

@@ -175,6 +175,8 @@ function decodeJwtEmail(token: string): string | null {
 // Cho renderer hiện "Đã kết nối: email@..." mà không cần gọi mạng — đọc thẳng từ access token đã
 // lưu (không refresh dù đã gần hết hạn, vì đây chỉ để hiển thị, không phải để gọi API thật).
 export function getConnectedEmail(): string | null {
+  const manual = getRuntimeConfig()?.manualAccessToken;
+  if (manual) return decodeJwtEmail(manual);
   if (!cached) cached = loadPersistedState() ?? seedFromEnv();
   if (!cached?.accessToken) return null;
   return decodeJwtEmail(cached.accessToken);
@@ -209,11 +211,16 @@ async function requestNewTokenWithRetry(refreshToken: string, attempts = 3): Pro
 // Cho renderer biết đã kết nối tài khoản Hanet chưa (để hiện "Đăng nhập lại" thay vì bắt kết nối
 // lại từ đầu) mà không cần gọi getAccessToken() — tránh gọi mạng chỉ để kiểm tra trạng thái hiển thị.
 export function hasStoredToken(): boolean {
+  if (getRuntimeConfig()?.manualAccessToken) return true;
   if (!cached) cached = loadPersistedState() ?? seedFromEnv();
   return cached !== null;
 }
 
 export async function getAccessToken(): Promise<string> {
+  // Token nhập tay thắng OAuth: dùng nguyên văn, không refresh (không có refresh token đi kèm).
+  const manualToken = getRuntimeConfig()?.manualAccessToken;
+  if (manualToken) return manualToken;
+
   if (!cached) {
     cached = loadPersistedState() ?? seedFromEnv();
   }

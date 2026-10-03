@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   ActivateLicenseInput,
   ConnectHanetAccountInput,
+  ConnectWithTokenInput,
   EmployeeRecord,
   SingleEmployeeInput,
   SyncResultItem,
@@ -120,6 +121,12 @@ export const connectHanetAccountInputSchema: z.ZodType<ConnectHanetAccountInput>
   apiBaseUrl: z.string().min(1).max(500),
   clientId: z.string().min(1).max(500),
   clientSecret: z.string().max(500),
+});
+
+export const connectWithTokenInputSchema: z.ZodType<ConnectWithTokenInput> = z.object({
+  apiBaseUrl: z.string().min(1).max(500),
+  accessToken: z.string().min(1).max(5000),
+  placeId: z.string().min(1).max(200),
 });
 
 export const activePlaceIdInputSchema: z.ZodType<string> = z.string().min(1).max(200);

@@ -10,6 +10,9 @@ export interface RuntimeConfig {
   apiBaseUrl?: string;
   clientId?: string;
   clientSecret?: string;
+  /** Access token nhập tay (không qua OAuth) — dùng khi không đăng nhập được, ví dụ tài khoản chỉ
+   *  được chia sẻ hoặc server Hanet đặt cục bộ. Có giá trị này thì app dùng thẳng, không refresh. */
+  manualAccessToken?: string;
   /**
    * Place đang dùng để gọi API đăng ký — tách hẳn khỏi license/OAuth creds: đổi qua
    * ActivePlaceSwitcher ở header không nên đụng tới các field kia, và ngược lại kết nối
@@ -85,6 +88,7 @@ export function getRuntimeConfig(): RuntimeConfig | null {
       apiBaseUrl: envApiBaseUrl || cached?.apiBaseUrl,
       clientId: envClientId || cached?.clientId,
       clientSecret: envClientSecret || cached?.clientSecret,
+      manualAccessToken: cached?.manualAccessToken,
       activePlaceId: cached?.activePlaceId || envPlaceId,
     };
   }
@@ -95,6 +99,7 @@ export function getRuntimeConfig(): RuntimeConfig | null {
       apiBaseUrl: envApiBaseUrl || cached.apiBaseUrl,
       clientId: envClientId || cached.clientId,
       clientSecret: envClientSecret || cached.clientSecret,
+      manualAccessToken: cached.manualAccessToken,
       activePlaceId: cached.activePlaceId || envPlaceId,
     };
   }
@@ -134,6 +139,28 @@ export function saveConnectionConfig(config: { apiBaseUrl: string; clientId: str
     savedApiBaseUrls: savedApiBaseUrls.includes(config.apiBaseUrl)
       ? savedApiBaseUrls
       : [...savedApiBaseUrls, config.apiBaseUrl],
+  };
+  persist(next);
+  cached = next;
+}
+
+/**
+ * Lưu kết nối nhập tay: access token + Place ID (+ Server API). Không đụng licenseKey. Kết nối lại
+ * qua OAuth (saveConnectionConfig) sẽ tự bỏ token nhập tay vì không copy field này sang.
+ */
+export function saveManualConnection(input: { apiBaseUrl: string; accessToken: string; placeId: string }): void {
+  const previous = getRuntimeConfig();
+  const savedApiBaseUrls = previous?.savedApiBaseUrls ?? [];
+  const next: RuntimeConfig = {
+    licenseKey: previous?.licenseKey ?? '',
+    clientId: previous?.clientId,
+    clientSecret: previous?.clientSecret,
+    apiBaseUrl: input.apiBaseUrl,
+    manualAccessToken: input.accessToken,
+    activePlaceId: input.placeId,
+    savedApiBaseUrls: savedApiBaseUrls.includes(input.apiBaseUrl)
+      ? savedApiBaseUrls
+      : [...savedApiBaseUrls, input.apiBaseUrl],
   };
   persist(next);
   cached = next;

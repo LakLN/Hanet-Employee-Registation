@@ -15,6 +15,13 @@ const envPath = app.isPackaged
   : path.join(__dirname, '..', '..', '.env');
 dotenv.config({ path: envPath, quiet: true });
 
+// Không khóa single-instance thì một phiên bản cũ có thể còn chạy ẩn (tray/background) trong lúc
+// installer/updater ghi đè file exe — NSIS gặp "file đang được sử dụng" và phải retry. Phiên thứ hai
+// tự thoát ngay, phiên đầu focus lại cửa sổ có sẵn.
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+}
+
 // Một số driver GPU (thường gặp trên card đồ hoạ tích hợp Intel/AMD hoặc máy ảo/RDP) khiến GPU
 // process của Chromium bị crash ngẫu nhiên, biểu hiện rõ nhất là màn hình trắng sau khi chuyển
 // sang app khác rồi quay lại. App này chỉ hiển thị form/bảng dữ liệu, không cần tăng tốc phần
@@ -122,6 +129,14 @@ function configureAutoUpdater(win: BrowserWindow) {
 
   void autoUpdater.checkForUpdates();
 }
+
+app.on('second-instance', () => {
+  const [win] = BrowserWindow.getAllWindows();
+  if (win) {
+    if (win.isMinimized()) win.restore();
+    win.focus();
+  }
+});
 
 app.whenReady().then(() => {
   // Menu mặc định của Electron cho phép mở DevTools và reload — không cần với app nội bộ, và là

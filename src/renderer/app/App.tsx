@@ -52,6 +52,8 @@ function App() {
     syncTally,
     removingIds,
     handleSync,
+    handleRetryPerson,
+    handleRetryFailed,
     handleCancel,
     handleExport,
     handleRemovePerson,
@@ -295,6 +297,9 @@ function App() {
         results={syncResults}
         progress={syncProgress}
         current={isSyncing ? currentProcessing : []}
+        isSyncing={isSyncing}
+        onRetryPerson={handleRetryPerson}
+        onRetryFailed={handleRetryFailed}
         removingIds={removingIds}
         onRemovePerson={handleRemovePerson}
         onRemoveAllSuccess={handleRemoveAllSuccess}

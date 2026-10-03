@@ -1,6 +1,6 @@
 {
   "name": "hanet-employee-registration",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Ứng dụng nội bộ đăng ký nhân viên lên hệ thống camera AI Hanet",
   "author": "Maxcom",
   "private": true,
@@ -50,9 +50,12 @@
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
+      "include": "resources/installer.nsh",
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Hanet Employee Registration"
+      "shortcutName": "Hanet Employee Registration",
+      "runAfterFinish": false,
+      "differentialPackage": false
     },
     "publish": [
       {

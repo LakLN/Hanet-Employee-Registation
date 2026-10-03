@@ -57,9 +57,9 @@ export function useBulkSync(
           ),
         );
       } else if (item.returnCode === HANET_INVALID_IMAGE_CODE) {
-        // Nếu Hanet trả lỗi ảnh không hợp, lưu trạng thái và một ghi chú bằng tiếng Việt
-        const vnNote =
-          'Ảnh không hợp lệ. Vui lòng đảm bảo ảnh rõ nét, chỉ có 1 người, hiển thị đầy đủ mắt, mũi và miệng, nhìn thẳng vào camera, không đội mũ và không đeo khẩu trang.';
+        // Lỗi ảnh không hợp lệ: ghi chú lấy đúng message Hanet trả về (khuyến nghị chụp ảnh đã có ở
+        // dòng chú thích (*) trên màn hình chính).
+        const vnNote = item.message;
         setRecords((prev) =>
           prev.map((r) =>
             r.employeeId === item.employeeId
@@ -118,6 +118,32 @@ export function useBulkSync(
     const validRecords = records.filter((item) => item.status === 'VALID' && !item.registeredStatus);
     runBulkSync(validRecords);
   };
+
+  // Thử lại các NV đăng ký không thành công (tone error): gỡ registeredStatus cũ (vd. ảnh không hợp
+  // lệ) để gửi lại như bản ghi mới. Bỏ qua những dòng không còn VALID trong Data Grid.
+  const retryEmployees = (employeeIds: string[]) => {
+    const ids = new Set(employeeIds);
+    const toRetry = records
+      .filter((r) => ids.has(r.employeeId) && r.status === 'VALID')
+      .map((r) => ({ ...r, registeredStatus: undefined, registeredNote: undefined }));
+    if (toRetry.length === 0) {
+      notify('error', 'Không có nhân viên nào có thể thử lại (dữ liệu dòng không còn hợp lệ).');
+      return;
+    }
+    setRecords((prev) =>
+      prev.map((r) => (ids.has(r.employeeId) ? { ...r, registeredStatus: undefined, registeredNote: undefined } : r)),
+    );
+    runBulkSync(toRetry);
+  };
+
+  const handleRetryPerson = (item: SyncResultItem) => retryEmployees([item.employeeId]);
+
+  const handleRetryFailed = () =>
+    retryEmployees(
+      syncResults
+        .filter((item) => resolveStatusMeta(item.returnCode, item.message).tone === 'error')
+        .map((item) => item.employeeId),
+    );
 
   const handleCancel = async () => {
     const confirmed = window.confirm('Bạn có chắc muốn hủy? Các nhân viên chưa được xử lý sẽ không được đăng ký.');
@@ -252,6 +278,8 @@ export function useBulkSync(
     syncTally,
     removingIds,
     handleSync,
+    handleRetryPerson,
+    handleRetryFailed,
     handleCancel,
     handleExport,
     handleRemovePerson,
