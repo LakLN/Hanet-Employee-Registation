@@ -11,6 +11,7 @@ import {
   saveConnectionConfig,
   saveManualConnection,
 } from '../services/runtimeConfig';
+import { getMachineCode } from '../services/licenseOffline';
 import { exchangeCodeForToken, getAccessToken, getConnectedEmail, hasStoredToken } from '../services/hanetOAuth';
 import { REDIRECT_URI, runOAuthLogin } from '../services/hanetOAuthWindow';
 import { listPlaces } from '../services/hanetPlaces';
@@ -167,6 +168,11 @@ const handlers: IpcHandlerMap = {
         placeId: input.placeId.trim(),
       });
     },
+  },
+
+  [IPC.getMachineCode]: {
+    schema: noArgSchema,
+    handle: () => getMachineCode(),
   },
 
   [IPC.listSavedPlaces]: {

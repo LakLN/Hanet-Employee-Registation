@@ -7,3 +7,4 @@ coverage/
 .vscode/
 *.tsbuildinfo
 scripts/generate-license.js
+scripts/license-private.pem

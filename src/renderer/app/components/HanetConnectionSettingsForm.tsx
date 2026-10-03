@@ -30,6 +30,7 @@ export function HanetConnectionSettingsForm({ onSaved }: { onSaved: () => void }
   const [isLicenseActivated, setIsLicenseActivated] = useState(false);
   const [isActivatingLicense, setIsActivatingLicense] = useState(false);
   const [licenseError, setLicenseError] = useState<string | null>(null);
+  const [machineCode, setMachineCode] = useState('');
 
   const [isConnected, setIsConnected] = useState(false);
   const [connectedEmail, setConnectedEmail] = useState<string | null>(null);
@@ -45,6 +46,7 @@ export function HanetConnectionSettingsForm({ onSaved }: { onSaved: () => void }
   const [manualError, setManualError] = useState<string | null>(null);
 
   useEffect(() => {
+    window.hanetImporter.getMachineCode().then(setMachineCode).catch(() => undefined);
     window.hanetImporter.getRuntimeConfigStatus().then((status) => {
       if (status.current) {
         setApiBaseUrl(status.current.apiBaseUrl || DEFAULT_API_BASE_URL);
@@ -237,6 +239,12 @@ export function HanetConnectionSettingsForm({ onSaved }: { onSaved: () => void }
       )}
 
       <div className="border-t border-slate-100 pt-4 mt-5">
+        {!isLicenseActivated && machineCode && (
+          <p className="text-xs text-slate-500 mb-3">
+            Mã máy (gửi cho Maxcom để nhận license offline):{' '}
+            <span className="font-mono font-semibold text-slate-800 select-all">{machineCode}</span>
+          </p>
+        )}
         <label className="block text-sm font-medium text-slate-700 mb-1">Mã license</label>
         <div className="flex items-center rounded-lg border border-slate-200 focus-within:ring-2 focus-within:ring-blue-500 mb-1">
           <input

@@ -3,6 +3,8 @@ import path from 'path';
 import { app, safeStorage } from 'electron';
 import logger from '../logger';
 import { activateLicenseOnline } from './licenseActivation';
+import { BUILTIN_LICENSE_KEY } from './licenseConfig';
+import { isOfflineLicense, verifyOfflineLicense } from './licenseOffline';
 
 export interface RuntimeConfig {
   /** Mã license — chỉ nhập một lần (xem activateLicense), không có luồng đổi lại trong app. */
@@ -179,7 +181,11 @@ export async function activateLicense(licenseKey: string): Promise<void> {
   const previous = getRuntimeConfig();
   if (previous?.licenseKey) return;
 
-  await activateLicenseOnline(licenseKey);
+  // License offline (MXL1.…) tự xác thực bằng chữ ký + mã máy, không cần mạng; mã kiểu cũ vẫn đi
+  // đường Firebase.
+  if (licenseKey.trim().toUpperCase() === BUILTIN_LICENSE_KEY) licenseKey = BUILTIN_LICENSE_KEY;
+  else if (isOfflineLicense(licenseKey)) verifyOfflineLicense(licenseKey);
+  else await activateLicenseOnline(licenseKey);
 
   const next: RuntimeConfig = { ...previous, licenseKey };
   persist(next);
