@@ -8,3 +8,4 @@ coverage/
 *.tsbuildinfo
 scripts/generate-license.js
 scripts/license-private.pem
+scripts/screenshots/

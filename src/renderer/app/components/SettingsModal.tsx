@@ -2,7 +2,7 @@ import { Settings, X } from 'lucide-react';
 import { HanetConnectionSettingsForm } from './HanetConnectionSettingsForm';
 
 /**
- * Overlay mở từ nút Cài đặt ở header — cho sửa lại kết nối Hanet/license bất cứ lúc nào, không chỉ
+ * Overlay mở từ nút Cài đặt ở header — cho sửa lại kết nối Hanet bất cứ lúc nào, không chỉ
  * lần đầu như RuntimeConfigGate. Đóng bằng nút X hoặc bấm ra ngoài, không mất dữ liệu (Excel/ảnh)
  * đang có trong App vì overlay nằm trên, không unmount phần nội dung chính.
  */
@@ -29,7 +29,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
-        <HanetConnectionSettingsForm onSaved={onClose} />
+        <HanetConnectionSettingsForm />
       </div>
     </div>
   );

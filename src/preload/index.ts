@@ -37,7 +37,6 @@ const bridge: HanetImporterBridge = {
   connectHanetAccount: (input) => invoke(IPC.connectHanetAccount, input),
   connectWithToken: (input) => invoke(IPC.connectWithToken, input),
   listSavedPlaces: () => invoke(IPC.listSavedPlaces),
-  getMachineCode: () => invoke(IPC.getMachineCode),
   saveActivePlaceId: (placeId) => invoke(IPC.saveActivePlaceId, placeId),
   listDepartments: (input) => invoke(IPC.listDepartments, input),
   createDepartment: (input) => invoke(IPC.createDepartment, input),

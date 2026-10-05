@@ -36,7 +36,6 @@ export const IPC = {
   connectHanetAccount: 'config:connect-hanet-account',
   connectWithToken: 'config:connect-with-token',
   listSavedPlaces: 'config:list-saved-places',
-  getMachineCode: 'config:get-machine-code',
   saveActivePlaceId: 'config:save-active-place-id',
   listDepartments: 'hanet:list-departments',
   createDepartment: 'hanet:create-department',
@@ -148,7 +147,6 @@ export type IpcApi = {
   [IPC.connectHanetAccount]: { arg: ConnectHanetAccountInput; result: ConnectHanetAccountResult };
   [IPC.connectWithToken]: { arg: ConnectWithTokenInput; result: void };
   [IPC.listSavedPlaces]: { arg: void; result: ListSavedPlacesResult };
-  [IPC.getMachineCode]: { arg: void; result: string };
   [IPC.saveActivePlaceId]: { arg: string; result: void };
   [IPC.listDepartments]: { arg: ListDepartmentsInput; result: ListDepartmentsResult };
   [IPC.createDepartment]: { arg: CreateDepartmentInput; result: HanetDepartment };
@@ -183,7 +181,6 @@ export interface HanetImporterBridge {
   connectHanetAccount: (input: ConnectHanetAccountInput) => Promise<IpcApi[typeof IPC.connectHanetAccount]['result']>;
   connectWithToken: (input: ConnectWithTokenInput) => Promise<IpcApi[typeof IPC.connectWithToken]['result']>;
   listSavedPlaces: () => Promise<IpcApi[typeof IPC.listSavedPlaces]['result']>;
-  getMachineCode: () => Promise<IpcApi[typeof IPC.getMachineCode]['result']>;
   saveActivePlaceId: (placeId: string) => Promise<IpcApi[typeof IPC.saveActivePlaceId]['result']>;
   listDepartments: (input: ListDepartmentsInput) => Promise<IpcApi[typeof IPC.listDepartments]['result']>;
   createDepartment: (input: CreateDepartmentInput) => Promise<IpcApi[typeof IPC.createDepartment]['result']>;

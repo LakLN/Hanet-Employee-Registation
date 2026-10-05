@@ -10,26 +10,21 @@ function secretPlaceholder(length: number): string {
 }
 
 /**
- * Form cấu hình kết nối Hanet + license, dùng chung ở 2 nơi: màn hình chặn lần đầu
- * (RuntimeConfigGate) và modal Cài đặt mở lại từ header (SettingsModal). Nút "Kết nối tài khoản
- * Hanet" mở popup đăng nhập OAuth thật ở main process (xem hanetOAuthWindow.ts) — sau khi kết nối
- * xong, apiBaseUrl/clientId/clientSecret tự lưu luôn, không có nút Lưu riêng.
+ * Form cấu hình kết nối Hanet, dùng chung ở 2 nơi: bước 2 của màn hình chặn lần đầu
+ * (RuntimeConfigGate, sau khi đã kích hoạt license ở LicenseActivationForm) và modal Cài đặt mở lại
+ * từ header (SettingsModal). Nút "Kết nối tài khoản Hanet" mở popup đăng nhập OAuth thật ở main
+ * process (xem hanetOAuthWindow.ts) — sau khi kết nối xong, apiBaseUrl/clientId/clientSecret tự lưu
+ * luôn, không có nút Lưu riêng.
  *
  * Place ID KHÔNG nằm ở đây — chọn/đổi place là việc của ActivePlaceSwitcher ở header, độc lập với
- * kết nối tài khoản. License chỉ nhập/xác thực được MỘT LẦN — sau khi lưu, ô license khoá vĩnh viễn,
- * không có luồng đổi lại trong app.
+ * kết nối tài khoản. License kích hoạt ở form riêng (LicenseActivationForm), không nằm ở đây.
  */
-export function HanetConnectionSettingsForm({ onSaved }: { onSaved: () => void }) {
+export function HanetConnectionSettingsForm({ onConnected }: { onConnected?: () => void }) {
   const [apiBaseUrl, setApiBaseUrl] = useState(DEFAULT_API_BASE_URL);
   const [savedApiBaseUrls, setSavedApiBaseUrls] = useState<string[]>([]);
   const [clientId, setClientId] = useState('');
   const [clientSecret, setClientSecret] = useState('');
   const [savedSecretPlaceholder, setSavedSecretPlaceholder] = useState('');
-
-  const [licenseKey, setLicenseKey] = useState('');
-  const [isLicenseActivated, setIsLicenseActivated] = useState(false);
-  const [isActivatingLicense, setIsActivatingLicense] = useState(false);
-  const [licenseError, setLicenseError] = useState<string | null>(null);
 
   const [isConnected, setIsConnected] = useState(false);
   const [connectedEmail, setConnectedEmail] = useState<string | null>(null);
@@ -63,10 +58,6 @@ export function HanetConnectionSettingsForm({ onSaved }: { onSaved: () => void }
           setUsesManualToken(true);
           setConnectMode('manual');
         }
-        if (status.current.licenseKey) {
-          setLicenseKey(status.current.licenseKey);
-          setIsLicenseActivated(true);
-        }
       }
       setIsConnected(status.isConnected);
       setConnectedEmail(status.connectedEmail);
@@ -97,6 +88,8 @@ export function HanetConnectionSettingsForm({ onSaved }: { onSaved: () => void }
       setSavedApiBaseUrls((prev) => (prev.includes(apiBaseUrl.trim()) ? prev : [...prev, apiBaseUrl.trim()]));
       if (result.places.length === 0) {
         setConnectError('Kết nối thành công nhưng tài khoản này chưa có địa điểm (place) nào.');
+      } else {
+        onConnected?.();
       }
     } catch (err) {
       setConnectError(friendlyErrorMessage(err));
@@ -122,28 +115,11 @@ export function HanetConnectionSettingsForm({ onSaved }: { onSaved: () => void }
       setIsConnected(true);
       setManualToken('');
       setSavedApiBaseUrls((prev) => (prev.includes(apiBaseUrl.trim()) ? prev : [...prev, apiBaseUrl.trim()]));
+      onConnected?.();
     } catch (err) {
       setManualError(friendlyErrorMessage(err));
     } finally {
       setIsSavingManual(false);
-    }
-  };
-
-  const handleActivateLicense = async () => {
-    if (!licenseKey.trim()) {
-      setLicenseError('Vui lòng nhập mã license.');
-      return;
-    }
-    setIsActivatingLicense(true);
-    setLicenseError(null);
-    try {
-      await window.hanetImporter.activateLicense({ licenseKey: licenseKey.trim() });
-      setIsLicenseActivated(true);
-      onSaved();
-    } catch (err) {
-      setLicenseError(friendlyErrorMessage(err));
-    } finally {
-      setIsActivatingLicense(false);
     }
   };
 
@@ -250,33 +226,6 @@ export function HanetConnectionSettingsForm({ onSaved }: { onSaved: () => void }
         </div>
       )}
 
-      <div className="border-t border-slate-100 pt-4 mt-5">
-        <label className="block text-sm font-medium text-slate-700 mb-1">Mã license</label>
-        <div className="flex items-center rounded-lg border border-slate-200 focus-within:ring-2 focus-within:ring-blue-500 mb-1">
-          <input
-            value={licenseKey}
-            onChange={(e) => setLicenseKey(e.target.value)}
-            disabled={isLicenseActivated}
-            className="w-full rounded-lg px-3 py-2 text-sm disabled:bg-slate-50 disabled:text-slate-500 focus:outline-none"
-            placeholder="Mã license được cấp"
-          />
-          {isLicenseActivated ? (
-            <span className="flex items-center gap-1 pr-3 text-xs text-emerald-600 font-medium whitespace-nowrap">
-              <CheckCircle2 size={14} /> Đã kích hoạt
-            </span>
-          ) : (
-            <button
-              type="button"
-              onClick={handleActivateLicense}
-              disabled={isActivatingLicense}
-              className="rounded-r-lg bg-blue-600 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-medium px-4 py-2 hover:bg-blue-700 transition-colors whitespace-nowrap"
-            >
-              {isActivatingLicense ? 'Đang xác thực...' : 'Xác thực'}
-            </button>
-          )}
-        </div>
-        {licenseError && <p className="text-xs text-rose-600">{licenseError}</p>}
-      </div>
     </div>
   );
 }

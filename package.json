@@ -1,6 +1,6 @@
 {
   "name": "hanet-employee-registration",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Ứng dụng nội bộ đăng ký nhân viên lên hệ thống camera AI Hanet",
   "author": "Maxcom",
   "private": true,
@@ -23,7 +23,8 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "license:generate": "node scripts/generate-license.js"
+    "license:generate": "node scripts/generate-license.js",
+    "screenshots": "node scripts/screenshots.mjs"
   },
   "build": {
     "appId": "vn.com.maxcom.hanetemployeeregistation",
@@ -96,6 +97,7 @@
     "eslint-plugin-react-refresh": "^0.5.3",
     "globals": "^17.8.0",
     "lucide-react": "^1.27.0",
+    "playwright-core": "^1.63.0",
     "postcss": "^8.5.23",
     "prettier": "^3.9.6",
     "react": "^18.3.1",
