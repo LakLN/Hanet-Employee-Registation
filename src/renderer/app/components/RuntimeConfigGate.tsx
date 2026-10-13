@@ -13,9 +13,15 @@ type Step = 'loading' | 'license' | 'connect' | 'done';
  */
 export function RuntimeConfigGate({ children }: { children: ReactNode }) {
   const [step, setStep] = useState<Step>('loading');
+  // License đã kích hoạt nhưng hết hạn: dùng lại form license với thông báo hết hạn; nhập mã mới
+  // xong vào thẳng app vì kết nối Hanet đã có sẵn.
+  const [expired, setExpired] = useState(false);
 
   useEffect(() => {
-    window.hanetImporter.getRuntimeConfigStatus().then((status) => setStep(status.needsConfig ? 'license' : 'done'));
+    window.hanetImporter.getRuntimeConfigStatus().then((status) => {
+      setExpired(status.licenseExpired);
+      setStep(status.needsConfig ? 'license' : 'done');
+    });
   }, []);
 
   if (step === 'loading') return null;
@@ -32,16 +38,20 @@ export function RuntimeConfigGate({ children }: { children: ReactNode }) {
           </div>
           <div>
             <h2 className="font-semibold text-slate-800 leading-none">
-              {isLicenseStep ? 'Kích hoạt license' : 'Kết nối tài khoản Hanet'}
+              {isLicenseStep ? (expired ? 'License đã hết hạn' : 'Kích hoạt license') : 'Kết nối tài khoản Hanet'}
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">
-              {isLicenseStep ? 'Bước 1/2 — Nhập mã license được cấp' : 'Bước 2/2 — Nhập thông tin kết nối được cấp'}
+              {isLicenseStep
+                ? expired
+                  ? 'Liên hệ Maxcom để gia hạn hoặc nhập mã license mới'
+                  : 'Bước 1/2 — Nhập mã license được cấp'
+                : 'Bước 2/2 — Nhập thông tin kết nối được cấp'}
             </p>
           </div>
         </div>
 
         {isLicenseStep ? (
-          <LicenseActivationForm onActivated={() => setStep('connect')} />
+          <LicenseActivationForm expired={expired} onActivated={() => setStep(expired ? 'done' : 'connect')} />
         ) : (
           <>
             <HanetConnectionSettingsForm onConnected={() => setStep('done')} />

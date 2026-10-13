@@ -1,4 +1,5 @@
 import { Settings, X } from 'lucide-react';
+import { AppUpdateSection } from './AppUpdateSection';
 import { HanetConnectionSettingsForm } from './HanetConnectionSettingsForm';
 
 /**
@@ -30,6 +31,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
         </div>
 
         <HanetConnectionSettingsForm />
+        <AppUpdateSection />
       </div>
     </div>
   );

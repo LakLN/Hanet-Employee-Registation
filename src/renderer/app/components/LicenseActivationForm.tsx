@@ -7,7 +7,13 @@ import { friendlyErrorMessage } from '../utils/friendlyError';
  * khoản Hanet. Kích hoạt luôn qua mạng (Firebase, xem licenseActivation.ts ở main): mỗi mã chỉ
  * kích hoạt được một lần, sau đó không có luồng đổi lại trong app.
  */
-export function LicenseActivationForm({ onActivated }: { onActivated: () => void }) {
+export function LicenseActivationForm({
+  onActivated,
+  expired = false,
+}: {
+  onActivated: () => void;
+  expired?: boolean;
+}) {
   const [licenseKey, setLicenseKey] = useState('');
   const [isActivating, setIsActivating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,6 +42,11 @@ export function LicenseActivationForm({ onActivated }: { onActivated: () => void
         void handleActivate();
       }}
     >
+      {expired && (
+        <p className="text-sm text-rose-600 bg-rose-50 border border-rose-100 rounded-lg px-3 py-2 mb-4">
+          License đã hết hạn. Liên hệ Maxcom để gia hạn, hoặc nhập mã mới nếu được cấp.
+        </p>
+      )}
       <label className="block text-sm font-medium text-slate-700 mb-1">Mã license</label>
       <input
         value={licenseKey}
@@ -56,7 +67,20 @@ export function LicenseActivationForm({ onActivated }: { onActivated: () => void
       </button>
 
       {error && <p className="text-xs text-rose-600 mt-3">{error}</p>}
-      <p className="text-xs text-slate-400 mt-3">Cần kết nối mạng để kích hoạt. Mỗi mã chỉ kích hoạt được một lần.</p>
+      <p className="text-xs text-slate-400 mt-3">
+        {expired
+          ? 'Đã được gia hạn? Mở lại app khi có mạng để cập nhật.'
+          : 'Cần kết nối mạng để kích hoạt. Mỗi mã chỉ kích hoạt được một lần.'}
+      </p>
+      <div className="text-xs text-slate-500 mt-3 space-y-1 border-t border-slate-100 pt-3">
+        <p>
+          Chưa có mã license? Liên hệ Maxcom: <span className="font-medium text-slate-700">0896 962 739</span> (anh
+          Viễn) để nhận mã kích hoạt.
+        </p>
+        <p>
+          Hỗ trợ kỹ thuật: <span className="font-medium text-slate-700">Kiệt – 0327 960 446</span>
+        </p>
+      </div>
     </form>
   );
 }

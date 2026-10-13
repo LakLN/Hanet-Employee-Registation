@@ -1,10 +1,13 @@
 import os from 'os';
 import { BrowserWindow } from 'electron';
 import { IPC, IPC_EVENT } from '@shared/ipc';
+import { checkForUpdate, downloadAndInstallUpdate, getAppVersion } from '../services/appUpdater';
 import { getHanetConfig } from '../services/hanetConfig';
 import { prepareImage, registerPersonToHanet, removePersonById, uploadPersonToHanet } from '../services/hanetClient';
 import {
   activateLicense,
+  refreshLicenseExpiry,
+  isLicenseExpired,
   getRuntimeConfig,
   needsRuntimeConfig,
   saveActivePlaceId,
@@ -123,15 +126,18 @@ const handlers: IpcHandlerMap = {
 
   [IPC.getRuntimeConfigStatus]: {
     schema: noArgSchema,
-    handle: () => {
+    handle: async () => {
+      await refreshLicenseExpiry();
       const config = getRuntimeConfig();
       return {
         needsConfig: needsRuntimeConfig(),
+        licenseExpired: !!config?.licenseKey && isLicenseExpired(),
         isConnected: hasStoredToken(),
         connectedEmail: getConnectedEmail(),
         current: config
           ? {
               licenseKey: config.licenseKey,
+              licenseExpiresAt: config.licenseExpiresAt,
               apiBaseUrl: config.apiBaseUrl,
               clientId: config.clientId,
               clientSecretLength: config.clientSecret?.length ?? 0,
@@ -219,6 +225,10 @@ const handlers: IpcHandlerMap = {
       return createDepartment(apiBaseUrl, accessToken, placeID, input.name, input.desc);
     },
   },
+
+  [IPC.getAppVersion]: { schema: noArgSchema, handle: () => getAppVersion() },
+  [IPC.checkForUpdate]: { schema: noArgSchema, handle: () => checkForUpdate() },
+  [IPC.installUpdate]: { schema: noArgSchema, handle: () => downloadAndInstallUpdate() },
 };
 
 export function registerAllIpcHandlers(): void {

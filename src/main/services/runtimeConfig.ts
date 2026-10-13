@@ -2,11 +2,13 @@ import fs from 'fs';
 import path from 'path';
 import { app, safeStorage } from 'electron';
 import logger from '../logger';
-import { activateLicenseOnline } from './licenseActivation';
+import { activateLicenseOnline, fetchLicenseExpiry, isExpired } from './licenseActivation';
 
 export interface RuntimeConfig {
   /** Mã license — chỉ nhập một lần (xem activateLicense), không có luồng đổi lại trong app. */
   licenseKey: string;
+  /** Hạn dùng license (ngày hoặc ISO) lấy từ Firebase lúc kích hoạt/làm mới. Trống = vĩnh viễn. */
+  licenseExpiresAt?: string;
   apiBaseUrl?: string;
   clientId?: string;
   clientSecret?: string;
@@ -85,6 +87,7 @@ export function getRuntimeConfig(): RuntimeConfig | null {
   if (envLicenseKey) {
     return {
       licenseKey: envLicenseKey,
+      licenseExpiresAt: cached?.licenseExpiresAt,
       apiBaseUrl: envApiBaseUrl || cached?.apiBaseUrl,
       clientId: envClientId || cached?.clientId,
       clientSecret: envClientSecret || cached?.clientSecret,
@@ -96,6 +99,7 @@ export function getRuntimeConfig(): RuntimeConfig | null {
   if (cached) {
     return {
       licenseKey: cached.licenseKey,
+      licenseExpiresAt: cached.licenseExpiresAt,
       apiBaseUrl: envApiBaseUrl || cached.apiBaseUrl,
       clientId: envClientId || cached.clientId,
       clientSecret: envClientSecret || cached.clientSecret,
@@ -121,7 +125,36 @@ export function getRuntimeConfig(): RuntimeConfig | null {
 // không còn là điều kiện chặn màn hình chính (xem RuntimeConfigGate).
 export function needsRuntimeConfig(): boolean {
   const config = getRuntimeConfig();
-  return !config || !config.licenseKey;
+  return !config || !config.licenseKey || isLicenseExpired();
+}
+
+/** License đã quá hạn (theo hạn lưu trên máy, được làm mới từ Firebase mỗi lần mở app). Hạn lỗi
+ *  định dạng coi như hết hạn. */
+export function isLicenseExpired(): boolean {
+  try {
+    return isExpired(getRuntimeConfig()?.licenseExpiresAt);
+  } catch {
+    return true;
+  }
+}
+
+let expiryRefreshed = false;
+
+/**
+ * Đồng bộ hạn dùng từ Firebase (mỗi lần chạy app một lần) để gia hạn/đổi hạn phía server có hiệu
+ * lực mà không cần cài lại. Không có mạng thì giữ hạn đã lưu.
+ */
+export async function refreshLicenseExpiry(): Promise<void> {
+  if (expiryRefreshed) return;
+  const previous = getRuntimeConfig();
+  if (!previous?.licenseKey) return;
+  const expiresAt = await fetchLicenseExpiry(previous.licenseKey);
+  if (expiresAt === undefined) return;
+  expiryRefreshed = true;
+  if ((previous.licenseExpiresAt ?? null) === expiresAt) return;
+  const next: RuntimeConfig = { ...previous, licenseExpiresAt: expiresAt ?? undefined };
+  persist(next);
+  cached = next;
 }
 
 /**
@@ -134,6 +167,7 @@ export function saveConnectionConfig(config: { apiBaseUrl: string; clientId: str
   const savedApiBaseUrls = previous?.savedApiBaseUrls ?? [];
   const next: RuntimeConfig = {
     licenseKey: previous?.licenseKey ?? '',
+    licenseExpiresAt: previous?.licenseExpiresAt,
     activePlaceId: previous?.activePlaceId,
     ...config,
     savedApiBaseUrls: savedApiBaseUrls.includes(config.apiBaseUrl)
@@ -153,6 +187,7 @@ export function saveManualConnection(input: { apiBaseUrl: string; accessToken: s
   const savedApiBaseUrls = previous?.savedApiBaseUrls ?? [];
   const next: RuntimeConfig = {
     licenseKey: previous?.licenseKey ?? '',
+    licenseExpiresAt: previous?.licenseExpiresAt,
     clientId: previous?.clientId,
     clientSecret: previous?.clientSecret,
     apiBaseUrl: input.apiBaseUrl,
@@ -177,12 +212,13 @@ export function saveManualConnection(input: { apiBaseUrl: string; accessToken: s
  */
 export async function activateLicense(licenseKey: string): Promise<void> {
   const previous = getRuntimeConfig();
-  if (previous?.licenseKey) return;
+  // Mã hết hạn thì cho nhập mã mới thay thế; mã còn hạn vẫn khoá, không đổi lại.
+  if (previous?.licenseKey && !isLicenseExpired()) return;
 
   licenseKey = licenseKey.trim();
-  await activateLicenseOnline(licenseKey);
+  const { expiresAt } = await activateLicenseOnline(licenseKey);
 
-  const next: RuntimeConfig = { ...previous, licenseKey };
+  const next: RuntimeConfig = { ...previous, licenseKey, licenseExpiresAt: expiresAt ?? undefined };
   persist(next);
   cached = next;
 }

@@ -1,6 +1,5 @@
 import path from 'path';
-import { app, BrowserWindow, Menu, screen, shell, dialog } from 'electron';
-import { autoUpdater, type UpdateInfo } from 'electron-updater';
+import { app, BrowserWindow, Menu, screen, shell } from 'electron';
 import dotenv from 'dotenv';
 import windowIcon from '../../resources/maxcom_favicon.png?asset';
 import './logger';
@@ -88,48 +87,6 @@ function createWindow(): BrowserWindow {
   return win;
 }
 
-function configureAutoUpdater(win: BrowserWindow) {
-  if (!app.isPackaged) return;
-
-  // feedURL lấy theo cấu hình "publish" trong package.json (provider: github) — electron-builder
-  // ghi sẵn vào app-update.yml lúc build, không cần gọi setFeedURL().
-  autoUpdater.autoDownload = false;
-
-  autoUpdater.on('update-available', (info: UpdateInfo) => {
-    const response = dialog.showMessageBoxSync(win, {
-      type: 'info',
-      title: 'Cập nhật mới',
-      message: `Đã có bản mới hơn: ${info.version}. Bạn có muốn tải về cập nhật không?`,
-      buttons: ['Tải về', 'Để sau'],
-      defaultId: 0,
-      cancelId: 1,
-    });
-    if (response === 0) {
-      autoUpdater.downloadUpdate();
-    }
-  });
-
-  autoUpdater.on('update-downloaded', () => {
-    const response = dialog.showMessageBoxSync(win, {
-      type: 'question',
-      title: 'Cập nhật đã sẵn sàng',
-      message: 'Bản cập nhật đã tải xong. Bạn có muốn khởi động lại để cài đặt ngay không?',
-      buttons: ['Khởi động lại', 'Để sau'],
-      defaultId: 0,
-      cancelId: 1,
-    });
-    if (response === 0) {
-      autoUpdater.quitAndInstall();
-    }
-  });
-
-  autoUpdater.on('error', (error: Error) => {
-    console.error('Auto-update error:', error);
-  });
-
-  void autoUpdater.checkForUpdates();
-}
-
 app.on('second-instance', () => {
   const [win] = BrowserWindow.getAllWindows();
   if (win) {
@@ -148,8 +105,7 @@ app.whenReady().then(() => {
   registerAllIpcHandlers();
   handleSafeFileProtocol();
 
-  const win = createWindow();
-  configureAutoUpdater(win);
+  createWindow();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

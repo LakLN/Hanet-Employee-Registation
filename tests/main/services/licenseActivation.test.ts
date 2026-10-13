@@ -9,7 +9,7 @@ vi.mock('axios', () => ({
   },
 }));
 
-vi.mock('electron', () => ({}));
+vi.mock('electron', () => ({ app: { getVersion: () => '9.9.9' } }));
 
 vi.mock('../../../src/main/logger', () => ({
   default: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -35,7 +35,8 @@ describe('activateLicenseOnline', () => {
     axiosPatchMock.mockResolvedValueOnce({ data: {} });
     const { activateLicenseOnline } = await loadModule();
 
-    await expect(activateLicenseOnline('MAY-01')).resolves.toBeUndefined();
+    // Không có expires_at → vĩnh viễn.
+    await expect(activateLicenseOnline('MAY-01')).resolves.toEqual({ expiresAt: null });
     expect(axiosGetMock.mock.calls[0]?.[0]).toContain('firebasedatabase.app/licenses/MAY-01.json');
   });
 
@@ -70,7 +71,8 @@ describe('activateLicenseOnline', () => {
     axiosPatchMock.mockResolvedValueOnce({ data: {} });
     const { activateLicenseOnline } = await loadModule();
 
-    await expect(activateLicenseOnline('MAY-01')).resolves.toBeUndefined();
+    // Không có expires_at → vĩnh viễn.
+    await expect(activateLicenseOnline('MAY-01')).resolves.toEqual({ expiresAt: null });
 
     expect(axiosPatchMock).toHaveBeenCalledTimes(1);
     const call = axiosPatchMock.mock.calls[0] as [string, Record<string, unknown>];
@@ -79,6 +81,39 @@ describe('activateLicenseOnline', () => {
     expect(body).toMatchObject({ is_used: true });
     expect(typeof body.activated_at).toBe('string');
     expect(typeof body.device_fingerprint).toBe('string');
+    expect(body.app_version).toBe('9.9.9');
+    expect(typeof body.hostname).toBe('string');
+    expect(typeof body.os_user).toBe('string');
+    expect(typeof body.os_version).toBe('string');
+  });
+
+  it('từ chối mã đã hết hạn (expires_at trong quá khứ)', async () => {
+    axiosGetMock.mockResolvedValueOnce({ data: { valid: true, is_used: false, expires_at: '2020-01-01' } });
+    const { activateLicenseOnline } = await loadModule();
+
+    await expect(activateLicenseOnline('MAY-01')).rejects.toThrow(/hết hạn/);
+    expect(axiosPatchMock).not.toHaveBeenCalled();
+  });
+
+  it('kích hoạt được mã còn hạn và trả về expiresAt', async () => {
+    axiosGetMock.mockResolvedValueOnce({ data: { valid: true, is_used: false, expires_at: '2999-12-31' } });
+    axiosPatchMock.mockResolvedValueOnce({ data: {} });
+    const { activateLicenseOnline } = await loadModule();
+
+    await expect(activateLicenseOnline('MAY-01')).resolves.toEqual({ expiresAt: '2999-12-31' });
+  });
+
+  it('expires_at rỗng hoặc toàn khoảng trắng = vĩnh viễn; sai định dạng thì báo lỗi', async () => {
+    const { parseLicenseExpiry, isExpired } = await loadModule();
+
+    expect(parseLicenseExpiry('')).toBeNull();
+    expect(parseLicenseExpiry('  ')).toBeNull();
+    expect(parseLicenseExpiry(undefined)).toBeNull();
+    expect(isExpired(null)).toBe(false);
+    expect(() => parseLicenseExpiry('khong-phai-ngay')).toThrow(/không hợp lệ/);
+    // Chỉ có ngày → còn dùng được hết ngày đó.
+    expect(isExpired('2026-12-31', new Date('2026-12-31T12:00:00').getTime())).toBe(false);
+    expect(isExpired('2026-12-31', new Date('2027-01-01T00:00:01').getTime())).toBe(true);
   });
 
   it('báo lỗi kết nối khi không đọc được node license', async () => {

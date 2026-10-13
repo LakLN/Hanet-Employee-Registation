@@ -39,6 +39,9 @@ export const IPC = {
   saveActivePlaceId: 'config:save-active-place-id',
   listDepartments: 'hanet:list-departments',
   createDepartment: 'hanet:create-department',
+  getAppVersion: 'app:get-version',
+  checkForUpdate: 'app:check-for-update',
+  installUpdate: 'app:install-update',
 } as const;
 
 /** Sự kiện main -> renderer (một chiều, không có phản hồi). */
@@ -130,6 +133,11 @@ export interface CreateDepartmentInput {
   desc?: string;
 }
 
+export type UpdateCheckResult =
+  | { status: 'unavailable'; currentVersion: string }
+  | { status: 'up-to-date'; currentVersion: string }
+  | { status: 'available'; currentVersion: string; latestVersion: string };
+
 /** Kiểu của từng channel invoke/handle: `arg` là dữ liệu renderer gửi lên, `result` là phản hồi. */
 export type IpcApi = {
   [IPC.selectExcel]: { arg: void; result: SelectedExcelFile | null };
@@ -150,6 +158,9 @@ export type IpcApi = {
   [IPC.saveActivePlaceId]: { arg: string; result: void };
   [IPC.listDepartments]: { arg: ListDepartmentsInput; result: ListDepartmentsResult };
   [IPC.createDepartment]: { arg: CreateDepartmentInput; result: HanetDepartment };
+  [IPC.getAppVersion]: { arg: void; result: string };
+  [IPC.checkForUpdate]: { arg: void; result: UpdateCheckResult };
+  [IPC.installUpdate]: { arg: void; result: void };
 };
 
 /** Kiểu payload của từng sự kiện main -> renderer. */
@@ -184,6 +195,9 @@ export interface HanetImporterBridge {
   saveActivePlaceId: (placeId: string) => Promise<IpcApi[typeof IPC.saveActivePlaceId]['result']>;
   listDepartments: (input: ListDepartmentsInput) => Promise<IpcApi[typeof IPC.listDepartments]['result']>;
   createDepartment: (input: CreateDepartmentInput) => Promise<IpcApi[typeof IPC.createDepartment]['result']>;
+  getAppVersion: () => Promise<IpcApi[typeof IPC.getAppVersion]['result']>;
+  checkForUpdate: () => Promise<IpcApi[typeof IPC.checkForUpdate]['result']>;
+  installUpdate: () => Promise<IpcApi[typeof IPC.installUpdate]['result']>;
 
   onSyncProgress: (cb: (payload: IpcEventPayload[typeof IPC_EVENT.syncProgress]) => void) => Unsubscribe;
   onSyncCurrent: (cb: (payload: IpcEventPayload[typeof IPC_EVENT.syncCurrent]) => void) => Unsubscribe;

@@ -40,6 +40,9 @@ const bridge: HanetImporterBridge = {
   saveActivePlaceId: (placeId) => invoke(IPC.saveActivePlaceId, placeId),
   listDepartments: (input) => invoke(IPC.listDepartments, input),
   createDepartment: (input) => invoke(IPC.createDepartment, input),
+  getAppVersion: () => invoke(IPC.getAppVersion),
+  checkForUpdate: () => invoke(IPC.checkForUpdate),
+  installUpdate: () => invoke(IPC.installUpdate),
 
   onSyncProgress: (cb) => subscribe(IPC_EVENT.syncProgress, cb),
   onSyncCurrent: (cb) => subscribe(IPC_EVENT.syncCurrent, cb),

@@ -75,6 +75,8 @@ export interface SyncResultItem {
 
 export interface RuntimeConfigStatus {
   needsConfig: boolean;
+  /** License đã kích hoạt nhưng quá hạn — renderer hiện thông báo hết hạn thay vì form kích hoạt lần đầu. */
+  licenseExpired: boolean;
   /** Đã có access/refresh token lưu sẵn chưa — cho renderer biết hiện "Đăng nhập lại" (phụ) hay
    *  bắt buộc phải kết nối để tiếp tục, không cần gọi mạng để biết trạng thái này. */
   isConnected: boolean;
@@ -85,6 +87,7 @@ export interface RuntimeConfigStatus {
    *  ĐỘ DÀI (không phải giá trị) để form hiện đúng số dấu che, 0 nghĩa là chưa có secret. */
   current: {
     licenseKey: string;
+    licenseExpiresAt?: string;
     apiBaseUrl?: string;
     clientId?: string;
     clientSecretLength: number;
