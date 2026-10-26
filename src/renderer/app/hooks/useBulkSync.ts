@@ -1,4 +1,4 @@
-import { Dispatch, SetStateAction, useEffect, useMemo, useState } from 'react';
+import { Dispatch, SetStateAction, useEffect, useMemo, useRef, useState } from 'react';
 import { EmployeeRecord, SyncResultItem } from '@shared/types';
 import {
   HANET_DUPLICATE_ALIAS_CODE,
@@ -23,6 +23,30 @@ export function useBulkSync(
   const [isSyncing, setIsSyncing] = useState(false);
   const [isLogOpen, setIsLogOpen] = useState(false);
   const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
+  // Mọi nhân viên đã từng nạp trong phiên, theo Mã NV (bản mới nhất đè bản cũ, giữ thứ tự lần đầu
+  // xuất hiện). Chọn file mới sẽ THAY Data Grid, nhưng nhật ký kết quả vẫn cộng dồn cả phiên — xuất
+  // Excel từ đây để file xuất ra khớp với số trên app thay vì chỉ còn người của file mới nhất.
+  const sessionRecordsRef = useRef(new Map<string, EmployeeRecord>());
+
+  useEffect(() => {
+    for (const record of records) sessionRecordsRef.current.set(record.employeeId, record);
+  }, [records]);
+
+  // Đã xoá khỏi Hanet -> gỡ registeredStatus cả trên Data Grid lẫn bản ghi trong phiên (người thuộc
+  // file đã nạp trước đó không còn trên Data Grid, nên setRecords không chạm tới được).
+  const clearRegistered = (employeeId: string) => {
+    const sessionRecord = sessionRecordsRef.current.get(employeeId);
+    if (sessionRecord) {
+      sessionRecordsRef.current.set(employeeId, {
+        ...sessionRecord,
+        registeredStatus: undefined,
+        registeredNote: undefined,
+      });
+    }
+    setRecords((prev) =>
+      prev.map((r) => (r.employeeId === employeeId ? { ...r, registeredStatus: undefined, registeredNote: undefined } : r)),
+    );
+  };
 
   useEffect(() => {
     const unsubscribeResult = window.hanetImporter.onSyncResult((item: SyncResultItem) => {
@@ -141,12 +165,37 @@ export function useBulkSync(
 
   const handleRetryPerson = (item: SyncResultItem) => retryEmployees([item.employeeId]);
 
-  const handleRetryFailed = () =>
+  // Thử lại MỌI người chưa thành công — cả "Thất bại" lẫn "Đã tồn tại": báo trùng đôi khi chỉ là lỗi
+  // tạm phía Hanet, hoặc bản cũ đã được xoá sau đó, nên gửi lại một lượt để loại trừ.
+  const handleRetryUnsuccessful = () =>
     retryEmployees(
       syncResults
-        .filter((item) => resolveStatusMeta(item.returnCode, item.message).tone === 'error')
+        .filter((item) => resolveStatusMeta(item.returnCode, item.message).tone !== 'success')
         .map((item) => item.employeeId),
     );
+
+  // Mã NV gửi lên Hanet là aliasID (nếu Excel có cột riêng) hoặc chính Mã NV — tra trùng phải dùng
+  // đúng giá trị đã gửi.
+  const aliasOf = (employeeId: string) => records.find((r) => r.employeeId === employeeId)?.aliasID || employeeId;
+
+  // Xoá các bản ghi đang giữ Mã NV trên Hanet rồi đăng ký lại người này. Dừng lại (không đăng ký)
+  // nếu xoá lỗi bất kỳ bản nào — đăng ký tiếp chắc chắn lại báo trùng.
+  const handleReplaceExisting = async (item: SyncResultItem, personIDs: string[]): Promise<boolean> => {
+    for (const personID of personIDs) {
+      try {
+        const result = await window.hanetImporter.removePerson({ personID });
+        if (!result.success) {
+          notify('error', `Không xoá được bản ghi cũ của "${item.name}": ${result.message}`);
+          return false;
+        }
+      } catch (error) {
+        notify('error', `Lỗi khi xoá bản ghi cũ: ${friendlyErrorMessage(error)}`);
+        return false;
+      }
+    }
+    retryEmployees([item.employeeId]);
+    return true;
+  };
 
   const handleCancel = async () => {
     const confirmed = window.confirm('Bạn có chắc muốn hủy? Các nhân viên chưa được xử lý sẽ không được đăng ký.');
@@ -155,14 +204,15 @@ export function useBulkSync(
   };
 
   const handleExport = async () => {
-    if (records.length === 0) {
+    const sessionRecords = Array.from(sessionRecordsRef.current.values());
+    if (sessionRecords.length === 0) {
       notify('error', 'Chưa có dữ liệu để xuất.');
       return;
     }
     try {
-      // Xuất TOÀN BỘ Data Grid, không chỉ những người đã đăng ký — giữ đúng bộ cột như file import
-      // để có thể chỉnh sửa (vd. ai thiếu ảnh) rồi import lại.
-      const filePath = await window.hanetImporter.exportSyncResults({ records, syncResults });
+      // Xuất TOÀN BỘ nhân viên trong phiên (gộp qua các lần chọn file), không chỉ những người đã
+      // đăng ký — giữ đúng bộ cột như file import để có thể chỉnh sửa (vd. ai thiếu ảnh) rồi import lại.
+      const filePath = await window.hanetImporter.exportSyncResults({ records: sessionRecords, syncResults });
       if (filePath) notify('success', `Đã xuất file: ${filePath}`);
     } catch (error) {
       notify('error', `Lỗi xuất Excel: ${friendlyErrorMessage(error)}`);
@@ -183,11 +233,7 @@ export function useBulkSync(
         setSyncResults((prev) => prev.filter((r) => r.employeeId !== item.employeeId));
         // Đã xoá khỏi Hanet -> gỡ luôn registeredStatus trên Data Grid, để dòng này được tính lại
         // vào "sẵn sàng đăng ký" và có thể gửi lại nếu cần (khớp thực tế: không còn trên Hanet nữa).
-        setRecords((prev) =>
-          prev.map((r) =>
-            r.employeeId === item.employeeId ? { ...r, registeredStatus: undefined, registeredNote: undefined } : r,
-          ),
-        );
+        clearRegistered(item.employeeId);
         notify('success', `Đã xoá "${item.name}" khỏi Hanet.`);
       } else {
         notify('error', `Không xoá được "${item.name}": ${result.message}`);
@@ -230,11 +276,7 @@ export function useBulkSync(
         if (result.success) {
           removedCount += 1;
           setSyncResults((prev) => prev.filter((r) => r.employeeId !== item.employeeId));
-          setRecords((prev) =>
-            prev.map((r) =>
-              r.employeeId === item.employeeId ? { ...r, registeredStatus: undefined, registeredNote: undefined } : r,
-            ),
-          );
+          clearRegistered(item.employeeId);
         } else {
           failedCount += 1;
         }
@@ -282,7 +324,9 @@ export function useBulkSync(
     removingIds,
     handleSync,
     handleRetryPerson,
-    handleRetryFailed,
+    handleRetryUnsuccessful,
+    handleReplaceExisting,
+    aliasOf,
     handleCancel,
     handleExport,
     handleRemovePerson,

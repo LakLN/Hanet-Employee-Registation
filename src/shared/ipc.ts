@@ -4,6 +4,7 @@ import {
   ConnectHanetAccountResult,
   ConnectWithTokenInput,
   EmployeeRecord,
+  HanetAliasMatch,
   HanetApiResponse,
   HanetDepartment,
   ListSavedPlacesResult,
@@ -31,6 +32,7 @@ export const IPC = {
   cancelBulkRegister: 'hanet:cancel-bulk-register',
   registerSingle: 'hanet:register-single',
   removePerson: 'hanet:remove-person',
+  findPersonsByAlias: 'hanet:find-persons-by-alias',
   getRuntimeConfigStatus: 'config:get-runtime-status',
   activateLicense: 'config:activate-license',
   connectHanetAccount: 'config:connect-hanet-account',
@@ -102,6 +104,10 @@ export interface ExportResultsInput {
   syncResults: SyncResultItem[];
 }
 
+export interface FindPersonsByAliasInput {
+  aliasID: string;
+}
+
 export interface RemovePersonResult {
   success: boolean;
   message: string;
@@ -150,6 +156,7 @@ export type IpcApi = {
   [IPC.cancelBulkRegister]: { arg: void; result: boolean };
   [IPC.registerSingle]: { arg: SingleEmployeeInput; result: SingleRegisterResult };
   [IPC.removePerson]: { arg: RemovePersonInput; result: RemovePersonResult };
+  [IPC.findPersonsByAlias]: { arg: FindPersonsByAliasInput; result: HanetAliasMatch[] };
   [IPC.getRuntimeConfigStatus]: { arg: void; result: RuntimeConfigStatus };
   [IPC.activateLicense]: { arg: ActivateLicenseInput; result: void };
   [IPC.connectHanetAccount]: { arg: ConnectHanetAccountInput; result: ConnectHanetAccountResult };
@@ -187,6 +194,7 @@ export interface HanetImporterBridge {
   cancelBulkRegister: () => Promise<IpcApi[typeof IPC.cancelBulkRegister]['result']>;
   registerSinglePerson: (record: SingleEmployeeInput) => Promise<IpcApi[typeof IPC.registerSingle]['result']>;
   removePerson: (input: RemovePersonInput) => Promise<IpcApi[typeof IPC.removePerson]['result']>;
+  findPersonsByAlias: (input: FindPersonsByAliasInput) => Promise<IpcApi[typeof IPC.findPersonsByAlias]['result']>;
   getRuntimeConfigStatus: () => Promise<IpcApi[typeof IPC.getRuntimeConfigStatus]['result']>;
   activateLicense: (input: ActivateLicenseInput) => Promise<IpcApi[typeof IPC.activateLicense]['result']>;
   connectHanetAccount: (input: ConnectHanetAccountInput) => Promise<IpcApi[typeof IPC.connectHanetAccount]['result']>;

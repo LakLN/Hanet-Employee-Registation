@@ -3,7 +3,13 @@ import { BrowserWindow } from 'electron';
 import { IPC, IPC_EVENT } from '@shared/ipc';
 import { checkForUpdate, downloadAndInstallUpdate, getAppVersion } from '../services/appUpdater';
 import { getHanetConfig } from '../services/hanetConfig';
-import { prepareImage, registerPersonToHanet, removePersonById, uploadPersonToHanet } from '../services/hanetClient';
+import {
+  findPersonsByAlias,
+  prepareImage,
+  registerPersonToHanet,
+  removePersonById,
+  uploadWithAliasCheck,
+} from '../services/hanetClient';
 import {
   activateLicense,
   refreshLicenseExpiry,
@@ -33,6 +39,7 @@ import {
   createDepartmentInputSchema,
   employeeRecordsSchema,
   exportResultsInputSchema,
+  findPersonsByAliasInputSchema,
   listDepartmentsInputSchema,
   noArgSchema,
   parseExcelInputSchema,
@@ -66,7 +73,7 @@ async function getRegisterConfig() {
 const bulkRunner = new BulkRegistrationRunner({
   getConfig: getRegisterConfig,
   prepareImage,
-  upload: (record, image, config, signal) => uploadPersonToHanet(record, image, config, 2, signal),
+  upload: (record, image, config, signal) => uploadWithAliasCheck(record, image, config, 2, signal),
   concurrency: { upload: UPLOAD_CONCURRENCY, resize: RESIZE_CONCURRENCY, prefetch: IMAGE_PREFETCH },
 });
 
@@ -121,6 +128,37 @@ const handlers: IpcHandlerMap = {
     handle: async ({ personID }) => {
       const config = await getHanetConfig();
       return removePersonById(personID, config);
+    },
+  },
+
+  [IPC.findPersonsByAlias]: {
+    schema: findPersonsByAliasInputSchema,
+    handle: async ({ aliasID }) => {
+      const config = await getHanetConfig();
+      const matches = await findPersonsByAlias(aliasID, config);
+      // Hanet chỉ trả placeID — đổi sang tên địa điểm để người dùng biết bản trùng nằm ở đâu. Lấy
+      // danh sách địa điểm lỗi thì vẫn trả kết quả, chỉ hiện placeID thay cho tên.
+      const apiBaseUrl = getRuntimeConfig()?.apiBaseUrl || 'https://partner.hanet.ai';
+      const placeNames = new Map<string, string>();
+      try {
+        for (const place of await listPlaces(apiBaseUrl, config.accessToken)) placeNames.set(place.placeID, place.name);
+      } catch {
+        // bỏ qua
+      }
+      return matches
+        .filter((m) => m.personID !== undefined && m.personID !== null && m.personID !== '')
+        .map((m) => {
+          const placeID = m.placeID !== undefined ? String(m.placeID) : '';
+          return {
+            personID: String(m.personID),
+            name: m.name ?? '',
+            title: m.title ?? '',
+            avatarUrl: m.avatar || undefined,
+            placeID,
+            placeName: m.placeName || placeNames.get(placeID) || (placeID ? `Địa điểm ${placeID}` : 'Không rõ địa điểm'),
+            isActivePlace: placeID !== '' && placeID === String(config.placeId),
+          };
+        });
     },
   },
 

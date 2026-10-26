@@ -56,7 +56,9 @@ function App() {
     removingIds,
     handleSync,
     handleRetryPerson,
-    handleRetryFailed,
+    handleRetryUnsuccessful,
+    handleReplaceExisting,
+    aliasOf,
     handleCancel,
     handleExport,
     handleRemovePerson,
@@ -236,7 +238,8 @@ function App() {
                 )}
               </div>
               <div className="flex items-center gap-2">
-                {!isSyncing && syncResults.length > 0 && !isLogOpen && (
+                {/* Hiện cả khi đang chạy: lỡ đóng panel giữa chừng vẫn mở lại xem tiến trình được. */}
+                {(isSyncing || syncResults.length > 0) && !isLogOpen && (
                   <button
                     type="button"
                     onClick={() => setIsLogOpen(true)}
@@ -309,7 +312,9 @@ function App() {
         current={isSyncing ? currentProcessing : []}
         isSyncing={isSyncing}
         onRetryPerson={handleRetryPerson}
-        onRetryFailed={handleRetryFailed}
+        onRetryUnsuccessful={handleRetryUnsuccessful}
+        aliasOf={aliasOf}
+        onReplaceExisting={handleReplaceExisting}
         removingIds={removingIds}
         onRemovePerson={handleRemovePerson}
         onRemoveAllSuccess={handleRemoveAllSuccess}

@@ -364,6 +364,105 @@ export async function removePersonById(
   }
 }
 
+function findByAliasUrl(): string {
+  return `${apiBaseUrl().replace(/\/+$/, '')}/person/getListByAliasIDAllPlace`;
+}
+
+interface RawAliasMatch {
+  personID?: string | number;
+  name?: string;
+  aliasID?: string;
+  title?: string;
+  avatar?: string;
+  placeID?: string | number;
+  placeName?: string;
+}
+
+/**
+ * Tìm person theo aliasID trên TẤT CẢ địa điểm của tài khoản. Hanet báo trùng Mã NV (-9005) ở phạm
+ * vi cả tài khoản, không chỉ địa điểm đang chọn — nên người dùng tìm trong danh sách của địa điểm
+ * hiện tại thường không thấy. API này cho biết bản ghi đang nằm ở địa điểm nào, kèm personID để xoá.
+ */
+export async function findPersonsByAlias(aliasID: string, config: HanetConfig): Promise<RawAliasMatch[]> {
+  const body = new URLSearchParams({ token: config.accessToken, aliasID });
+  try {
+    const response = await axios.post<HanetApiResponse & { data?: unknown }>(findByAliasUrl(), body.toString(), {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      timeout: 15000,
+      httpsAgent: httpsAgentFor(findByAliasUrl()),
+    });
+    const data = response.data;
+    if (data?.returnCode !== 1) {
+      logger.warn(`[Hanet] Tra aliasID ${aliasID} thất bại | returnCode=${data?.returnCode} | ${data?.returnMessage}`);
+      throw new Error(data?.returnMessage || 'Hanet trả về lỗi không xác định');
+    }
+    logger.info(`[Hanet] Tra aliasID ${aliasID} | response:`, data.data);
+    return Array.isArray(data.data) ? (data.data as RawAliasMatch[]) : [];
+  } catch (err: unknown) {
+    if (!axios.isAxiosError(err)) throw err;
+    const hanetMessage = (err.response?.data as HanetApiResponse | undefined)?.returnMessage;
+    throw new Error(hanetMessage || describeRequestError(err).message, { cause: err });
+  }
+}
+
+const ALIAS_RECHECK_DELAY_MS = 1500;
+
+/** Có thật person nào đang giữ aliasID không. null = không tra được (lỗi mạng/endpoint). */
+async function aliasIsTaken(aliasID: string, config: HanetConfig, tag: string): Promise<boolean | null> {
+  try {
+    return (await findPersonsByAlias(aliasID, config)).length > 0;
+  } catch (err) {
+    logger.warn(`${tag} -> không tra lại được aliasID ${aliasID}: ${err instanceof Error ? err.message : err}`);
+    return null;
+  }
+}
+
+/**
+ * Upload kèm kiểm chứng "trùng Mã NV" (-9005). Thực tế Hanet đôi khi trả -9005 khi lỗi tạm phía
+ * server dù không ai giữ mã đó — nếu tin ngay, app ghi "Đã tồn tại" sai và người dùng không biết phải
+ * gửi lại. Nên trước khi nhận là trùng: tra xem có person nào giữ mã không; không có (hoặc không tra
+ * được) thì âm thầm gửi lại một lần. Vẫn -9005 mà tra vẫn không thấy ai thì báo là lỗi (tone error)
+ * để rơi vào nhóm "Thử lại", thay vì nhãn trùng mã.
+ */
+export async function uploadWithAliasCheck(
+  record: HanetRegisterInput,
+  imageBuffer: Buffer,
+  config: HanetConfig,
+  maxRetry = 2,
+  signal?: AbortSignal,
+): Promise<RegisterResult> {
+  const first = await uploadPersonToHanet(record, imageBuffer, config, maxRetry, signal);
+  if (first.raw?.returnCode !== -9005) return first;
+
+  const tag = tagOf(record);
+  const aliasID = record.aliasID || record.employeeId;
+  const taken = await aliasIsTaken(aliasID, config, tag);
+  if (taken) {
+    logger.info(`${tag} -> -9005 đã kiểm chứng: có hồ sơ đang giữ aliasID ${aliasID}`);
+    return first;
+  }
+
+  logger.warn(
+    `${tag} -> Hanet báo trùng aliasID ${aliasID} nhưng ${taken === false ? 'không tìm thấy ai giữ mã' : 'không tra lại được'} -> gửi lại 1 lần`,
+  );
+  await new Promise((resolve) => setTimeout(resolve, ALIAS_RECHECK_DELAY_MS));
+  if (signal?.aborted) return { success: false, message: 'Đã hủy', employeeId: record.employeeId, cancelled: true };
+
+  const second = await uploadPersonToHanet(record, imageBuffer, config, maxRetry, signal);
+  if (second.raw?.returnCode !== -9005) return second;
+
+  // Không tra được thì không đủ căn cứ để phủ nhận — giữ nguyên kết quả trùng của Hanet.
+  if (taken === null || (await aliasIsTaken(aliasID, config, tag)) !== false) return second;
+
+  logger.warn(`${tag} -> vẫn -9005 sau khi gửi lại nhưng không ai giữ aliasID ${aliasID} -> tính là lỗi phía Hanet`);
+  return {
+    ...second,
+    message:
+      'Hanet báo trùng Mã NV (-9005) nhưng không tìm thấy hồ sơ nào đang giữ mã này — nhiều khả năng lỗi tạm thời phía Hanet, vui lòng thử lại.',
+    raw: { ...second.raw, returnCode: undefined, returnMessage: undefined },
+  };
+}
+
 /** Đăng ký một người: chuẩn bị ảnh rồi upload. Dùng cho luồng thêm lẻ một nhân viên. */
 export async function registerPersonToHanet(
   record: HanetRegisterInput,
@@ -373,7 +472,7 @@ export async function registerPersonToHanet(
 ): Promise<RegisterResult> {
   const prepared = await prepareImage(record);
   if (!prepared.ok) return prepared.failure;
-  return uploadPersonToHanet(record, prepared.buffer, config, maxRetry, signal);
+  return uploadWithAliasCheck(record, prepared.buffer, config, maxRetry, signal);
 }
 
 export default registerPersonToHanet;

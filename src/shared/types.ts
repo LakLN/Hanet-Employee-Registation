@@ -61,6 +61,18 @@ export interface HanetExistingPerson {
   avatarUrl?: string;
 }
 
+/** Một person đang giữ Mã NV (aliasID) trên Hanet — kết quả tra cứu khi bị báo trùng Mã NV. */
+export interface HanetAliasMatch {
+  personID: string;
+  name: string;
+  title: string;
+  avatarUrl?: string;
+  placeID: string;
+  placeName: string;
+  /** Nằm ở đúng địa điểm đang chọn để đăng ký hay ở địa điểm khác của cùng tài khoản. */
+  isActivePlace: boolean;
+}
+
 export interface SyncResultItem {
   employeeId: string;
   name: string;

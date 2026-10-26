@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
-import { X, Eye, Loader2, Trash2, RotateCcw, CheckCircle2, AlertTriangle, XCircle } from 'lucide-react';
+import { X, Eye, Loader2, Trash2, RotateCcw, CheckCircle2, AlertTriangle, XCircle, Search } from 'lucide-react';
 import { SyncResultItem } from '@shared/types';
-import { resolveStatusMeta, StatusMeta } from '@shared/hanetStatus';
+import { HANET_DUPLICATE_ALIAS_CODE, resolveStatusMeta, StatusMeta } from '@shared/hanetStatus';
 import { DuplicatePersonModal } from './DuplicatePersonModal';
+import { AliasLookupModal } from './AliasLookupModal';
 
 interface Props {
   open: boolean;
@@ -12,7 +13,11 @@ interface Props {
   current?: Array<{ employeeId: string; name: string }>;
   isSyncing?: boolean;
   onRetryPerson?: (item: SyncResultItem) => void;
-  onRetryFailed?: () => void;
+  /** Thử lại tất cả người chưa thành công (thất bại + đã tồn tại). */
+  onRetryUnsuccessful?: () => void;
+  /** Mã NV thực gửi lên Hanet (aliasID) của một nhân viên — dùng để tra bản ghi đang giữ mã khi trùng. */
+  aliasOf?: (employeeId: string) => string;
+  onReplaceExisting?: (item: SyncResultItem, personIDs: string[]) => Promise<boolean>;
   removingIds?: Set<string>;
   onRemovePerson?: (item: SyncResultItem) => void;
   onRemoveAllSuccess?: () => void;
@@ -34,10 +39,10 @@ const toneStyle: Record<
 
 // Cùng bảng màu nền/viền với StatCard ở App.tsx (emerald/amber/rose) để 2 hàng thống kê — thẻ tổng
 // quan ngoài màn hình chính và bảng tóm tắt trong nhật ký — đọc như cùng một hệ thống màu.
-const summaryToneStyle: Record<StatusMeta['tone'], { bg: string; text: string; border: string }> = {
-  success: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200/80' },
-  warning: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200/80' },
-  error: { bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200/80' },
+const summaryToneStyle: Record<StatusMeta['tone'], { bg: string; text: string; border: string; ring: string }> = {
+  success: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200/80', ring: 'ring-emerald-400' },
+  warning: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200/80', ring: 'ring-amber-400' },
+  error: { bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200/80', ring: 'ring-rose-400' },
 };
 
 export function SyncResultsPanel({
@@ -48,13 +53,19 @@ export function SyncResultsPanel({
   current = [],
   isSyncing = false,
   onRetryPerson,
-  onRetryFailed,
+  onRetryUnsuccessful,
+  aliasOf,
+  onReplaceExisting,
   removingIds,
   onRemovePerson,
   onRemoveAllSuccess,
   gridOrder,
 }: Props) {
   const [activeItem, setActiveItem] = useState<SyncResultItem | null>(null);
+  const [aliasItem, setAliasItem] = useState<SyncResultItem | null>(null);
+  // Bấm vào ô tóm tắt để chỉ xem nhóm đó; bấm lại ô đang chọn để bỏ lọc.
+  const [toneFilter, setToneFilter] = useState<StatusMeta['tone'] | null>(null);
+  const toggleFilter = (tone: StatusMeta['tone']) => setToneFilter((prev) => (prev === tone ? null : tone));
   // Cố ý KHÔNG tự cuộn xuống cuối khi có kết quả mới: mỗi kết quả về mà cuộn một lần sẽ làm giật
   // UI và giành mất vị trí người dùng đang xem.
 
@@ -93,10 +104,17 @@ export function SyncResultsPanel({
     { success: 0, duplicate: 0, failed: 0 },
   );
 
+  const visibleResults = toneFilter
+    ? orderedResults.filter((item) => metaByItem.get(item)!.tone === toneFilter)
+    : orderedResults;
+  // Dòng "Đang xử lý" chưa có trạng thái nên chỉ hiện khi không lọc.
+  const visibleCurrent = toneFilter ? [] : current;
+
   // Chỉ tính tone success: handleRemoveAllSuccess (useBulkSync.ts) chỉ xoá đúng nhóm này — "Đã tồn
   // tại" (warning) có thể là person đã có sẵn trên Hanet từ trước, không phải do lần đăng ký này
   // tạo ra, nên không gộp vào để số hiển thị trên nút khớp với số thực sự bị xoá.
   const successCount = tally.success;
+  const unsuccessfulCount = tally.failed + tally.duplicate;
   const isProcessing = progress.total > 0 && progress.current !== progress.total;
 
   return (
@@ -137,24 +155,45 @@ export function SyncResultsPanel({
               </div>
             )}
             <div className="grid grid-cols-3 gap-2">
-              <SummaryPill count={tally.success} label="Thành công" tone="success" />
-              <SummaryPill count={tally.duplicate} label="Đã tồn tại" tone="warning" />
-              <SummaryPill count={tally.failed} label="Thất bại" tone="error" />
+              <SummaryPill
+                count={tally.success}
+                label="Thành công"
+                tone="success"
+                active={toneFilter === 'success'}
+                dimmed={toneFilter !== null && toneFilter !== 'success'}
+                onClick={() => toggleFilter('success')}
+              />
+              <SummaryPill
+                count={tally.duplicate}
+                label="Đã tồn tại"
+                tone="warning"
+                active={toneFilter === 'warning'}
+                dimmed={toneFilter !== null && toneFilter !== 'warning'}
+                onClick={() => toggleFilter('warning')}
+              />
+              <SummaryPill
+                count={tally.failed}
+                label="Thất bại"
+                tone="error"
+                active={toneFilter === 'error'}
+                dimmed={toneFilter !== null && toneFilter !== 'error'}
+                onClick={() => toggleFilter('error')}
+              />
             </div>
           </div>
         )}
 
-        {onRetryFailed && tally.failed > 0 && (
+        {onRetryUnsuccessful && unsuccessfulCount > 0 && (
           <div className="px-5 py-2.5 border-b border-slate-100 shrink-0">
             <button
               type="button"
-              onClick={onRetryFailed}
+              onClick={onRetryUnsuccessful}
               disabled={isSyncing}
-              title="Gửi lại các nhân viên đăng ký thất bại"
+              title="Gửi lại tất cả nhân viên chưa đăng ký thành công (thất bại + đã tồn tại)"
               className="flex items-center justify-center gap-1.5 w-full rounded-lg border border-blue-200 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 transition-colors disabled:opacity-50"
             >
               <RotateCcw size={13} />
-              Thử lại {tally.failed} người thất bại
+              Thử lại {unsuccessfulCount} người chưa thành công
             </button>
           </div>
         )}
@@ -174,14 +213,16 @@ export function SyncResultsPanel({
         )}
 
         <div className="flex-1 overflow-y-auto">
-          {orderedResults.length === 0 && current.length === 0 ? (
-            <div className="px-5 py-14 text-center text-sm text-slate-400">Chưa có kết quả nào.</div>
+          {visibleResults.length === 0 && visibleCurrent.length === 0 ? (
+            <div className="px-5 py-14 text-center text-sm text-slate-400">
+              {toneFilter ? 'Không có nhân viên nào trong nhóm này.' : 'Chưa có kết quả nào.'}
+            </div>
           ) : (
             <div className="divide-y divide-slate-50">
-              {current.map((item) => (
+              {visibleCurrent.map((item) => (
                 <ResultRow key={`current-${item.employeeId}`} pending name={item.name} employeeId={item.employeeId} />
               ))}
-              {orderedResults.map((item, idx) => {
+              {visibleResults.map((item, idx) => {
                 const meta = metaByItem.get(item)!;
                 const isRemoving = removingIds?.has(item.employeeId) ?? false;
                 return (
@@ -194,9 +235,14 @@ export function SyncResultsPanel({
                     durationMs={item.durationMs}
                     hasExisting={!!item.existingPerson}
                     onViewExisting={() => setActiveItem(item)}
+                    onLookupAlias={
+                      item.returnCode === HANET_DUPLICATE_ALIAS_CODE && aliasOf && onReplaceExisting
+                        ? () => setAliasItem(item)
+                        : undefined
+                    }
                     isRemoving={isRemoving}
                     onRetry={
-                      meta.tone === 'error' && onRetryPerson && !isSyncing ? () => onRetryPerson(item) : undefined
+                      meta.tone !== 'success' && onRetryPerson && !isSyncing ? () => onRetryPerson(item) : undefined
                     }
                     onRemove={item.personID && onRemovePerson ? () => onRemovePerson(item) : undefined}
                   />
@@ -215,6 +261,17 @@ export function SyncResultsPanel({
           existingPerson={activeItem.existingPerson}
         />
       )}
+
+      {aliasItem && aliasOf && onReplaceExisting && (
+        <AliasLookupModal
+          employeeName={aliasItem.name}
+          employeeId={aliasItem.employeeId}
+          aliasID={aliasOf(aliasItem.employeeId)}
+          canReplace={!isSyncing}
+          onClose={() => setAliasItem(null)}
+          onReplace={(personIDs) => onReplaceExisting(aliasItem, personIDs)}
+        />
+      )}
     </>
   );
 }
@@ -226,13 +283,29 @@ function describeResult(item: SyncResultItem, meta: StatusMeta): string {
   return item.returnCode !== undefined ? `[${item.returnCode}] ${message}` : message;
 }
 
-function SummaryPill({ count, label, tone }: { count: number; label: string; tone: StatusMeta['tone'] }) {
+interface SummaryPillProps {
+  count: number;
+  label: string;
+  tone: StatusMeta['tone'];
+  active: boolean;
+  dimmed: boolean;
+  onClick: () => void;
+}
+
+function SummaryPill({ count, label, tone, active, dimmed, onClick }: SummaryPillProps) {
   const style = summaryToneStyle[tone];
   return (
-    <div className={`flex flex-col items-center rounded-lg border py-1.5 ${style.bg} ${style.border}`}>
+    <button
+      type="button"
+      onClick={onClick}
+      title={active ? 'Bấm để xem tất cả' : `Chỉ xem nhóm "${label}"`}
+      className={`flex flex-col items-center rounded-lg border py-1.5 transition-all hover:brightness-95 ${style.bg} ${style.border} ${
+        active ? `ring-2 ring-offset-1 ${style.ring}` : ''
+      } ${dimmed ? 'opacity-50' : ''}`}
+    >
       <span className={`text-base font-semibold ${style.text}`}>{count}</span>
       <span className="text-[11px] opacity-80">{label}</span>
-    </div>
+    </button>
   );
 }
 
@@ -245,6 +318,7 @@ interface ResultRowProps {
   durationMs?: number;
   hasExisting?: boolean;
   onViewExisting?: () => void;
+  onLookupAlias?: () => void;
   isRemoving?: boolean;
   onRetry?: () => void;
   onRemove?: () => void;
@@ -261,6 +335,7 @@ function ResultRow({
   durationMs,
   hasExisting,
   onViewExisting,
+  onLookupAlias,
   isRemoving,
   onRetry,
   onRemove,
@@ -299,6 +374,16 @@ function ResultRow({
                     className="flex items-center gap-1 rounded-md border border-slate-200 px-1.5 py-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors"
                   >
                     <Eye size={14} />
+                  </button>
+                )}
+                {onLookupAlias && (
+                  <button
+                    type="button"
+                    onClick={onLookupAlias}
+                    title="Tìm hồ sơ đang giữ Mã NV này"
+                    className="flex items-center gap-1 rounded-md border border-amber-200 px-1.5 py-1 text-amber-600 hover:bg-amber-50 hover:text-amber-700 transition-colors"
+                  >
+                    <Search size={14} />
                   </button>
                 )}
                 {onRetry && (

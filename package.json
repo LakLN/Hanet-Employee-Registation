@@ -1,6 +1,6 @@
 {
   "name": "hanet-employee-registration",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Ứng dụng nội bộ đăng ký nhân viên lên hệ thống camera AI Hanet",
   "author": "Maxcom",
   "private": true,

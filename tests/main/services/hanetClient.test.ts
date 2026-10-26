@@ -149,3 +149,68 @@ describe('registerPersonToHanet', () => {
     expect(axiosPostMock).not.toHaveBeenCalled();
   });
 });
+
+describe('registerPersonToHanet — kiểm chứng trùng Mã NV (-9005)', () => {
+  const dupAlias = { status: 200, data: { returnCode: -9005, returnMessage: 'Alias id already exist' } };
+  const ok = { status: 200, data: { returnCode: 1, returnMessage: 'OK', data: { personID: 'p-1' } } };
+  const lookup = (persons: unknown[]) => ({ status: 200, data: { returnCode: 1, data: persons } });
+
+  // Phân luồng mock theo URL: đăng ký (/person/register) và tra alias (/getListByAliasIDAllPlace).
+  function routeAxios(registerResponses: unknown[], lookupResponses: unknown[]) {
+    axiosPostMock.mockImplementation(async (url: string) => {
+      const queue = url.includes('getListByAliasIDAllPlace') ? lookupResponses : registerResponses;
+      const next = queue.shift();
+      if (next instanceof Error) throw next;
+      return next;
+    });
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  async function run() {
+    const promise = registerPersonToHanet(baseRecord, config);
+    await vi.runAllTimersAsync();
+    return promise;
+  }
+
+  it('giữ kết quả trùng khi tra thấy có hồ sơ đang giữ mã, không gửi lại', async () => {
+    routeAxios([dupAlias], [lookup([{ personID: 'old', name: 'Người cũ', placeID: 'place-2' }])]);
+
+    const result = await run();
+
+    expect(result.raw?.returnCode).toBe(-9005);
+    const registerCalls = axiosPostMock.mock.calls.filter(([url]) => String(url).endsWith('/person/register'));
+    expect(registerCalls).toHaveLength(1);
+  });
+
+  it('âm thầm gửi lại khi không ai giữ mã, và thành công ở lần sau', async () => {
+    routeAxios([dupAlias, ok], [lookup([])]);
+
+    const result = await run();
+
+    expect(result.success).toBe(true);
+    expect(result.raw?.returnCode).toBe(1);
+  });
+
+  it('chuyển thành lỗi (không còn mã -9005) khi gửi lại vẫn báo trùng mà vẫn không ai giữ mã', async () => {
+    routeAxios([dupAlias, dupAlias], [lookup([]), lookup([])]);
+
+    const result = await run();
+
+    expect(result.success).toBe(false);
+    expect(result.raw?.returnCode).toBeUndefined();
+    expect(result.message).toContain('không tìm thấy hồ sơ nào');
+  });
+
+  it('không tra được thì vẫn gửi lại 1 lần, rồi giữ nguyên kết quả trùng của Hanet', async () => {
+    routeAxios([dupAlias, dupAlias], [fakeAxiosError({ message: 'boom', status: 500, data: {} })]);
+
+    const result = await run();
+
+    expect(result.raw?.returnCode).toBe(-9005);
+    const registerCalls = axiosPostMock.mock.calls.filter(([url]) => String(url).endsWith('/person/register'));
+    expect(registerCalls).toHaveLength(2);
+  });
+});

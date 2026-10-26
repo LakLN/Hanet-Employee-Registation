@@ -32,6 +32,7 @@ const bridge: HanetImporterBridge = {
   cancelBulkRegister: () => invoke(IPC.cancelBulkRegister),
   registerSinglePerson: (record) => invoke(IPC.registerSingle, record),
   removePerson: (input) => invoke(IPC.removePerson, input),
+  findPersonsByAlias: (input) => invoke(IPC.findPersonsByAlias, input),
   getRuntimeConfigStatus: () => invoke(IPC.getRuntimeConfigStatus),
   activateLicense: (input) => invoke(IPC.activateLicense, input),
   connectHanetAccount: (input) => invoke(IPC.connectHanetAccount, input),

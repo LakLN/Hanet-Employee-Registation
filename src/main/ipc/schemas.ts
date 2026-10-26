@@ -12,6 +12,7 @@ import {
   ExportResultsInput,
   ListDepartmentsInput,
   ParseExcelInput,
+  FindPersonsByAliasInput,
   RemovePersonInput,
 } from '@shared/ipc';
 
@@ -103,7 +104,11 @@ export const removePersonInputSchema: z.ZodType<RemovePersonInput> = z.object({
   personID: z.string().min(1).max(200),
 });
 
-export const employeeRecordsSchema = z.array(employeeRecordSchema).max(MAX_RECORDS_PER_BATCH);
+export const findPersonsByAliasInputSchema: z.ZodType<FindPersonsByAliasInput> = z.object({
+  aliasID: z.string().min(1).max(200),
+});
+
+export const employeeRecordsSchema =z.array(employeeRecordSchema).max(MAX_RECORDS_PER_BATCH);
 export const syncResultItemsSchema = z.array(syncResultItemSchema).max(MAX_RECORDS_PER_BATCH);
 
 export const exportResultsInputSchema: z.ZodType<ExportResultsInput> = z.object({
